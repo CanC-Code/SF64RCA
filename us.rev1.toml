@@ -35,8 +35,14 @@ renamed = [
 [[patches.instruction]]
 func = "Display_Update"
 vram = 0x80057D50
-value = 0x290103E8 # slti        $at, $t0, 0x200 -> slti $at, $t0, 0x3E8
+value = 0x290103E8 # slti  $at, $t0, 0x200 -> slti $at, $t0, 0x3E8
 [[patches.instruction]]
 func = "Display_Update"
 vram = 0x80057D5C
-value = 0x240903E7 # slti        addiu t1,zero, 0x1ff -> addiu t1,zero,0x3e7
+value = 0x240903E7 # addiu t1,zero, 0x1ff -> addiu t1,zero,0x3e7
+
+# Andross Level Complete: Make your team spawn early in the cutscene to compensate for widescreen
+[[patches.instruction]]
+func = "Andross_LevelComplete"
+vram = 0x80195068
+value = 0x240100C8 # addiu $at, $zero, 0xDC -> addiu $at, $zero, 0xC8 
