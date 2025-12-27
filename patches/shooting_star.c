@@ -326,8 +326,9 @@ RECOMP_PATCH void Andross_LevelComplete(Player* player) {
             }
 
             Math_SmoothStepToF(&D_ctx_80177A48[2], 10000.0f, 0.05f, 20.0f, 0.0f);
-
-            if (gCsFrameCount == 220) {
+            
+            // @recomp: Make your team spawn early in the cutscene to compensate for widescreen
+            if (gCsFrameCount == /* 220 */ 200) {
                 Andross_Team_Setup(0);
                 if (gTeamShields[TEAM_ID_FALCO] > 0) {
                     Andross_Team_Setup(1);
