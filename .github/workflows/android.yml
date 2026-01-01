@@ -7,60 +7,48 @@ on:
   pull_request:
 
 jobs:
-  build-apk:
+  build-android:
+    name: Build APK
     runs-on: ubuntu-latest
     env:
-      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
 
     steps:
-      # 1. Checkout repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      # Step 1: Checkout repo
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      # 2. Set up JDK (Java 17)
-      - name: Set up JDK
+      # Step 2: Set up JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
           java-version: 17
+          distribution: temurin
 
-      # 3. Install required packages
-      - name: Install required packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build unzip wget tar
+      # Step 3: Download Android SDK + NDK
+      - name: Setup Android SDK & NDK
+        uses: android-actions/setup-android@v2
+        with:
+          api-level: 34
+          ndk-version: 25.2.9519653
+          cmake-version: 3.25.2
+          build-tools: 34.0.0
 
-      # 4. Install Android SDK & NDK
-      - name: Setup Android SDK and NDK
-        run: |
-          mkdir -p $ANDROID_SDK_ROOT
-          cd $ANDROID_SDK_ROOT
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9123335_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d cmdline-tools
-          mv cmdline-tools/cmdline-tools cmdline-tools/latest
+      # Step 4: Ensure Gradle wrapper is executable
+      - name: Make Gradlew Executable
+        run: chmod +x ./gradlew
 
-          # Accept licenses
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+      # Step 5: Build CMake libraries via Gradle
+      - name: Build with Gradle (Release)
+        run: ./gradlew assembleRelease --stacktrace
 
-          # Install SDK packages and NDK
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "ndk;25.2.9519653"
+      # Step 6: List APK output
+      - name: List APK
+        run: ls -R android/app/build/outputs/apk
 
-      # 5. Set up environment variables for Gradle
-      - name: Setup environment
-        run: |
-          echo "export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
-          echo "export PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH" >> $GITHUB_ENV
-
-      # 6. Build APK via Gradle
-      - name: Build APK
-        run: |
-          ./gradlew clean assembleRelease --stacktrace
-
-      # 7. Upload APK as artifact
-      - name: Upload APK
+      # Step 7: Upload APK as artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v3
         with:
           name: Starfox64Recompiled-APK
-          path: app/build/outputs/apk/release/app-release.apk
+          path: android/app/build/outputs/apk/release/*.apk
