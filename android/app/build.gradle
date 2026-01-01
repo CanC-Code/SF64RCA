@@ -1,0 +1,86 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android' version '1.9.10' apply false
+}
+
+android {
+    namespace 'com.canc.starfox64'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.canc.starfox64"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.3"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17 -DANDROID"
+                abiFilters "armeabi-v7a","arm64-v8a","x86","x86_64"
+            }
+        }
+
+        ndk {
+            // Specify the C++ standard library
+            abiFilters "armeabi-v7a","arm64-v8a","x86","x86_64"
+        }
+
+        // Needed for SDL2 SDL_main on Android
+        ndkBuild {
+            arguments "APP_PLATFORM=android-24"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+            externalNativeBuild {
+                cmake {
+                    arguments "-DANDROID_STL=c++_shared"
+                }
+            }
+        }
+        debug {
+            externalNativeBuild {
+                cmake {
+                    arguments "-DANDROID_STL=c++_shared"
+                }
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "${projectDir}/CMakeLists.txt"
+            version "3.25.2"
+        }
+    }
+
+    packagingOptions {
+        pickFirst "**/*.so"
+        pickFirst "**/libc++_shared.so"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    sourceSets {
+        main {
+            jni.srcDirs = [] // CMake handles compilation
+            assets.srcDirs = ["../assets"]
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core-ktx:1.12.0'
+}
