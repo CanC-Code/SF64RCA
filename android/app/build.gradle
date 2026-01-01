@@ -1,64 +1,48 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android' version '1.9.10' apply false
+    id 'org.jetbrains.kotlin.android'
 }
 
 android {
-    namespace 'com.canc.starfox64'
+    namespace 'com.starfox64.recompiled'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.canc.starfox64"
+        applicationId "com.starfox64.recompiled"
         minSdk 24
         targetSdk 34
         versionCode 1
-        versionName "1.0.3"
+        versionName "1.0.0"
 
         externalNativeBuild {
             cmake {
-                cppFlags "-std=c++17 -DANDROID"
-                abiFilters "armeabi-v7a","arm64-v8a","x86","x86_64"
+                cppFlags "-std=c++17 -DANDROID -DSDL_MAIN_HANDLED"
             }
         }
 
         ndk {
-            abiFilters "armeabi-v7a","arm64-v8a","x86","x86_64"
-        }
-
-        ndkBuild {
-            arguments "APP_PLATFORM=android-24"
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
-            externalNativeBuild {
-                cmake {
-                    arguments "-DANDROID_STL=c++_shared"
-                }
-            }
-        }
-        debug {
-            externalNativeBuild {
-                cmake {
-                    arguments "-DANDROID_STL=c++_shared"
-                }
-            }
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
     externalNativeBuild {
         cmake {
-            path "${projectDir}/CMakeLists.txt"
-            version "3.25.2"
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.25.0"
         }
     }
 
-    packagingOptions {
-        pickFirst "**/*.so"
-        pickFirst "**/libc++_shared.so"
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
     }
 
     compileOptions {
@@ -69,17 +53,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-
-    sourceSets {
-        main {
-            jni.srcDirs = []
-            assets.srcDirs = ["../assets"]
-            jniLibs.srcDirs = ["${buildDir}/intermediates/cmake/release/obj"]
-        }
-    }
 }
 
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.10"
     implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
 }
