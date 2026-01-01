@@ -8,45 +8,65 @@ on:
 
 jobs:
   build-android:
-    name: Build APK
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repo
+      # ---------------------------
+      # 1. Checkout repository
+      # ---------------------------
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      # Step 2: Set up JDK 17
-      - name: Setup Java
+      # ---------------------------
+      # 2. Set up Java (required by Gradle)
+      # ---------------------------
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
-          java-version: 17
           distribution: temurin
+          java-version: 17
 
-      # Step 3: Setup Android SDK, NDK, CMake
+      # ---------------------------
+      # 3. Set up Android SDK + NDK
+      # ---------------------------
       - name: Setup Android SDK & NDK
-        uses: android-actions/setup-android@v2
+        uses: android-actions/setup-android@v3
         with:
           api-level: 34
+          build-tools: 34.0.0
           ndk-version: 25.2.9519653
           cmake-version: 3.25.2
-          build-tools: 34.0.0
 
-      # Step 4: Ensure Gradle wrapper is executable
-      - name: Make Gradlew Executable
-        run: chmod +x ./gradlew
+      # ---------------------------
+      # 4. Make Gradle wrapper executable
+      # (IMPORTANT: android/ is the project root)
+      # ---------------------------
+      - name: Make Gradlew executable
+        working-directory: android
+        run: chmod +x gradlew
 
-      # Step 5: Build APK
-      - name: Build with Gradle (Release)
+      # ---------------------------
+      # 5. Build release APK
+      # ---------------------------
+      - name: Build APK (Release)
+        working-directory: android
         run: ./gradlew assembleRelease --stacktrace
 
-      # Step 6: List APK output (debug visibility)
-      - name: List APK output
+      # ---------------------------
+      # 6. Verify APK output
+      # ---------------------------
+      - name: List APK outputs
         run: ls -R android/app/build/outputs/apk
 
-      # Step 7: Upload APK artifact
+      # ---------------------------
+      # 7. Upload APK as GitHub artifact
+      # ---------------------------
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Starfox64Recompiled-APK
-          path: android/app/build/outputs/apk/**/*.apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
