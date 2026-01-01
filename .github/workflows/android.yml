@@ -5,55 +5,62 @@ on:
     branches:
       - main
   pull_request:
-    branches:
-      - main
 
 jobs:
-  build-android:
-    name: Build Android APK
+  build-apk:
     runs-on: ubuntu-latest
-
     env:
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_NDK_HOME: ${{ github.workspace }}/android-ndk
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
 
     steps:
+      # 1. Checkout repo
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
 
-      - name: Set up JDK 17
+      # 2. Set up JDK (Java 17)
+      - name: Set up JDK
         uses: actions/setup-java@v3
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: 17
 
-      - name: Install Android SDK & NDK
+      # 3. Install required packages
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build unzip wget tar
+
+      # 4. Install Android SDK & NDK
+      - name: Setup Android SDK and NDK
         run: |
           mkdir -p $ANDROID_SDK_ROOT
           cd $ANDROID_SDK_ROOT
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip
-          rm cmdline-tools.zip
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9123335_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip -d cmdline-tools
+          mv cmdline-tools/cmdline-tools cmdline-tools/latest
 
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "ndk;25.2.9519653" "cmake;3.25.2" "build-tools;34.0.0"
+          # Accept licenses
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
 
-      - name: Set environment paths
+          # Install SDK packages and NDK
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "ndk;25.2.9519653"
+
+      # 5. Set up environment variables for Gradle
+      - name: Setup environment
         run: |
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
-          echo "PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH" >> $GITHUB_ENV
+          echo "export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
+          echo "export PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH" >> $GITHUB_ENV
 
+      # 6. Build APK via Gradle
       - name: Build APK
         run: |
-          cd android
-          ./gradlew clean assembleRelease
+          ./gradlew clean assembleRelease --stacktrace
 
-      - name: Upload APK as artifact
+      # 7. Upload APK as artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v3
         with:
           name: Starfox64Recompiled-APK
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/release/app-release.apk
