@@ -1,11 +1,10 @@
 package com.canc.starfox64
 
-import android.app.Activity
 import android.os.Bundle
+import org.libsdl.app.SDLActivity
 
-class Starfox64Activity : Activity() {
+class MainActivity : SDLActivity() {
 
-    // Load native library
     companion object {
         init {
             System.loadLibrary("Starfox64Recompiled")
@@ -14,9 +13,5 @@ class Starfox64Activity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Call native entry
-        nativeStart()
     }
-
-    private external fun nativeStart()
 }
