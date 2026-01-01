@@ -32,14 +32,14 @@ android {
             signingConfig signingConfigs.debug
             externalNativeBuild {
                 cmake {
-                    arguments "-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release"
+                    arguments "-DANDROID_STL=c++_shared"
                 }
             }
         }
         debug {
             externalNativeBuild {
                 cmake {
-                    arguments "-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Debug"
+                    arguments "-DANDROID_STL=c++_shared"
                 }
             }
         }
@@ -70,6 +70,7 @@ android {
         main {
             jni.srcDirs = [] // CMake handles compilation
             assets.srcDirs = ["../assets"]
+            jniLibs.srcDirs = ["${buildDir}/intermediates/cmake/release/obj"] // Include compiled .so files
         }
     }
 }
