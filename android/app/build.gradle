@@ -22,13 +22,7 @@ android {
         }
 
         ndk {
-            // Specify the C++ standard library
             abiFilters "armeabi-v7a","arm64-v8a","x86","x86_64"
-        }
-
-        // Needed for SDL2 SDL_main on Android
-        ndkBuild {
-            arguments "APP_PLATFORM=android-24"
         }
     }
 
@@ -38,14 +32,14 @@ android {
             signingConfig signingConfigs.debug
             externalNativeBuild {
                 cmake {
-                    arguments "-DANDROID_STL=c++_shared"
+                    arguments "-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release"
                 }
             }
         }
         debug {
             externalNativeBuild {
                 cmake {
-                    arguments "-DANDROID_STL=c++_shared"
+                    arguments "-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Debug"
                 }
             }
         }
