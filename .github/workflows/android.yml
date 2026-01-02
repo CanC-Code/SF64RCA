@@ -12,22 +12,28 @@ jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
-    env:
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
-      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$JAVA_HOME/bin:$PATH
 
     steps:
+      # 1️⃣ Install basic system tools first
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tar unzip wget
+
+      # 2️⃣ Checkout code AFTER tar is installed
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install required tools
+      # 3️⃣ Set environment variables
+      - name: Set environment variables
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip tar wget
+          echo "ANDROID_HOME=${GITHUB_WORKSPACE}/android-sdk" >> $GITHUB_ENV
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+          echo "${GITHUB_WORKSPACE}/android-sdk/cmdline-tools/latest/bin:$JAVA_HOME/bin:$PATH" >> $GITHUB_PATH
 
+      # 4️⃣ Download and setup Android cmdline-tools
       - name: Setup Android SDK cmdline-tools
         run: |
           mkdir -p $ANDROID_HOME/cmdline-tools/latest
@@ -35,13 +41,16 @@ jobs:
           unzip -q cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools/latest
           rm cmdline-tools.zip
 
-      - name: Accept Android SDK licenses
+      # 5️⃣ Accept SDK licenses
+      - name: Accept SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
+      # 6️⃣ Install SDK components
       - name: Install SDK components
         run: |
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
+      # 7️⃣ Build the project
       - name: Grant Gradle wrapper execution
         run: chmod +x ./android/gradlew
 
@@ -49,7 +58,8 @@ jobs:
         working-directory: ./android
         run: ./gradlew assembleDebug
 
-      - name: Upload APK artifact
+      # 8️⃣ Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
