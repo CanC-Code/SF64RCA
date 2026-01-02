@@ -1,67 +1,60 @@
-name: Build Starfox 64 Android APK
+name: Build Starfox64 APK
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
-
     env:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
+      PATH: /opt/cmake-3.27.3/bin:$PATH
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        distribution: temurin
-        java-version: 17
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build unzip wget curl
 
-    - name: Install Android SDK components
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y unzip wget zip
-        mkdir -p $ANDROID_SDK_ROOT
-        cd $ANDROID_SDK_ROOT
-        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-        unzip cmdline-tools.zip
-        rm cmdline-tools.zip
-        mv cmdline-tools latest
-        yes | $ANDROID_SDK_ROOT/latest/bin/sdkmanager --licenses
-        $ANDROID_SDK_ROOT/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+      - name: Install CMake 3.27.3
+        run: |
+          sudo mkdir -p /opt/cmake-3.27.3
+          sudo chown $USER:$USER /opt/cmake-3.27.3
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh -o cmake.sh
+          chmod +x cmake.sh
+          ./cmake.sh --skip-license --prefix=/opt/cmake-3.27.3
 
-    - name: Install CMake & Ninja
-      run: |
-        # CMake
-        curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh -o cmake.sh
-        chmod +x cmake.sh
-        sudo mkdir -p /opt/cmake-3.27.3
-        sudo chown $USER:$USER /opt/cmake-3.27.3
-        ./cmake.sh --skip-license --prefix=/opt/cmake-3.27.3
-        sudo ln -sf /opt/cmake-3.27.3/bin/cmake /usr/local/bin/cmake
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          ndk: 25.2.9519653
+          cmake: 3.27.3
+          build-tools: 34.0.0
 
-        # Ninja
-        sudo apt-get install -y ninja-build
-        sudo ln -sf $(which ninja) /usr/local/bin/ninja
+      - name: Verify tools
+        run: |
+          cmake --version
+          ninja --version
+          java -version
+          echo $ANDROID_SDK_ROOT
 
-    - name: Show CMake & Ninja versions
-      run: |
-        cmake --version
-        ninja --version
+      - name: Build Debug APK
+        run: |
+          cd android
+          ./gradlew clean assembleDebug --no-daemon
 
-    - name: Build APK (debug)
-      working-directory: android
-      run: ./gradlew clean assembleDebug
-
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: starfox64-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: starfox64-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
