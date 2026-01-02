@@ -22,7 +22,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y imagemagick curl unzip
+          sudo apt-get install -y imagemagick curl
 
       # 3. Set up JDK 17
       - name: Set up JDK 17
@@ -38,26 +38,20 @@ jobs:
           api-level: 34
           build-tools: 34.0.0
           ndk: 25.1.8937393
-          cmake: 3.22.1  # temporary, we’ll override with 3.27.3
+          cmake: 3.22.1  # placeholder; we will override manually below
 
       # 5. Download & setup CMake 3.27.3 manually
       - name: Download CMake 3.27.3
         run: |
           curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh -o cmake.sh
           chmod +x cmake.sh
+          sudo mkdir -p /opt/cmake-3.27.3
           sudo ./cmake.sh --skip-license --prefix=/opt/cmake-3.27.3
           sudo ln -sf /opt/cmake-3.27.3/bin/cmake /usr/local/bin/cmake
           sudo ln -sf /opt/cmake-3.27.3/bin/ninja /usr/local/bin/ninja
           cmake --version
 
-      # 6. Set Android NDK environment variables
-      - name: Set Android NDK environment
-        run: |
-          echo "ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/25.1.8937393" >> $GITHUB_ENV
-          echo "NDK_HOME=/usr/local/lib/android/sdk/ndk/25.1.8937393" >> $GITHUB_ENV
-          echo "PATH=/opt/cmake-3.27.3/bin:$PATH" >> $GITHUB_ENV
-
-      # 7. Cache Gradle for faster builds
+      # 6. Cache Gradle for faster builds
       - name: Cache Gradle
         uses: actions/cache@v3
         with:
@@ -68,7 +62,7 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # 8. Prepare Android resources (launcher icons and assets)
+      # 7. Prepare Android resources (launcher icons and assets)
       - name: Prepare Android resources
         run: |
           set -e -o pipefail
@@ -78,7 +72,7 @@ jobs:
             mkdir -p android/app/src/main/res/mipmap-$size
           done
 
-          # Generate launcher icons
+          # Generate launcher icons from the correct path
           convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -89,16 +83,16 @@ jobs:
           mkdir -p android/app/src/main/assets
           cp -r assets/* android/app/src/main/assets/
 
-      # 9. Make gradlew executable
+      # 8. Make gradlew executable
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # 10. Build the APK
+      # 9. Build the APK
       - name: Assemble Debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # 11. Upload APK artifact
+      # 10. Upload APK artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
