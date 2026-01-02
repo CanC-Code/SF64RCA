@@ -42,8 +42,14 @@ jobs:
         key: android-sdk-${{ runner.os }}-34
         restore-keys: android-sdk-${{ runner.os }}-
 
-    - name: Install required packages
-      run: sudo apt-get update && sudo apt-get install -y curl unzip tar imagemagick
+    - name: Install system packages
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          curl \
+          unzip \
+          tar \
+          imagemagick
 
     - name: Download Android command-line tools
       run: |
@@ -55,7 +61,8 @@ jobs:
         rm cmdline-tools.zip
 
     - name: Accept Android SDK licenses
-      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
     - name: Install Android SDK components
       run: |
@@ -66,11 +73,10 @@ jobs:
           "build-tools;34.0.0" \
           "ndk;27.3.13750724"
 
-    - name: Download and set up CMake 3.27.3
+    - name: Install CMake 3.27.3 (manual)
       run: |
         set -e -o pipefail
         if [ ! -d "$ANDROID_HOME/cmake/3.27.3" ]; then
-          echo "Downloading CMake 3.27.3 manually..."
           mkdir -p $ANDROID_HOME/cmake/3.27.3
           curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.tar.gz \
             | tar -xz --strip-components=1 -C $ANDROID_HOME/cmake/3.27.3
@@ -79,21 +85,24 @@ jobs:
 
     - name: Prepare Android resources
       run: |
+        set -e -o pipefail
+
         echo "Creating mipmap directories..."
-        mkdir -p android/app/src/main/res/mipmap-hdpi
         mkdir -p android/app/src/main/res/mipmap-mdpi
+        mkdir -p android/app/src/main/res/mipmap-hdpi
         mkdir -p android/app/src/main/res/mipmap-xhdpi
         mkdir -p android/app/src/main/res/mipmap-xxhdpi
         mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
         echo "Generating launcher icons..."
-        convert assets/icons/512.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-        convert assets/icons/512.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-        convert assets/icons/512.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-        convert assets/icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-        convert assets/icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+        convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+        convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+        convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+        convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+        convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-        echo "Copying additional assets..."
+        echo "Copying game assets..."
+        mkdir -p android/app/src/main/assets
         cp -r assets/* android/app/src/main/assets/
 
     - name: Build Android APK
