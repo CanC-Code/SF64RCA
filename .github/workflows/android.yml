@@ -8,22 +8,22 @@ on:
 
 jobs:
   build:
-    name: Build Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # <- ensures tar, unzip, zip, Java, cmake, ninja are available
+
     env:
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$PATH
 
     steps:
-      # Checkout repository
+      # Checkout the repository
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
           clean: true
           submodules: false
 
-      # Setup Android SDK & NDK
+      # Setup Android SDK, NDK, CMake
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
         with:
@@ -31,23 +31,13 @@ jobs:
           ndk-version: 25.1.8937393
           cmake-version: 3.27.3
 
-      # Display Android versions
-      - name: Verify Android SDK
-        run: |
-          sdkmanager --list
-          java -version
-          cmake --version
-          ninja --version
-          tar --version
-          unzip -v
-
-      # Build with Gradle
+      # Build the APK
       - name: Build APK
         run: |
           cd android
           ./gradlew assembleDebug --no-daemon
 
-      # Upload APK artifact
+      # Upload the APK artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
