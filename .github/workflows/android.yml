@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
 
     steps:
       # Step 1: Checkout repo
@@ -26,35 +25,30 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      # Step 3: Install Android SDK components
-      - name: Setup Android SDK components
-        run: |
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          cd $ANDROID_SDK_ROOT/cmdline-tools
-          if [ ! -d "latest" ]; then
-            mv ../cmdline-tools/* latest/
-          fi
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "ndk;25.2.9519653"
+      # Step 3: Download Android SDK + NDK
+      - name: Setup Android SDK & NDK
+        uses: android-actions/setup-android@v2
+        with:
+          api-level: 34
+          ndk-version: 25.2.9519653
+          cmake-version: 3.25.2
+          build-tools: 34.0.0
 
-      # Step 4: Make Gradle wrapper executable
+      # Step 4: Ensure Gradle wrapper is executable
       - name: Make Gradlew Executable
         run: chmod +x ./gradlew
 
-      # Step 5: Build release APK
+      # Step 5: Build CMake libraries via Gradle
       - name: Build with Gradle (Release)
         run: ./gradlew assembleRelease --stacktrace
 
       # Step 6: List APK output
-      - name: List APK files
-        run: ls -R app/build/outputs/apk/release
+      - name: List APK
+        run: ls -R app/build/outputs/apk
 
-      # Step 7: Upload APK artifact
+      # Step 7: Upload APK as artifact
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Starfox64Recompiled-APK
           path: app/build/outputs/apk/release/*.apk
