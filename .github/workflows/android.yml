@@ -64,7 +64,7 @@ jobs:
           "platform-tools" \
           "platforms;android-34" \
           "build-tools;34.0.0" \
-          "ndk;25.1.8937393" || true
+          "ndk;25.1.8937393"
 
     - name: Install CMake 3.27.3 (fallback)
       run: |
@@ -83,4 +83,4 @@ jobs:
       run: |
         set -e -o pipefail
         cd android
-        ./gradlew assembleDebug --no-daemon
+        ./gradlew clean assembleDebug --no-daemon
