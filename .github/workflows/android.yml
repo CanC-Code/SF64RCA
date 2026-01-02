@@ -4,51 +4,61 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build APK
     runs-on: ubuntu-latest
 
     env:
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/25.1.8937393
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk
 
     steps:
-    - name: Checkout code
+    - name: Checkout repo
       uses: actions/checkout@v3
 
-    # --- Set up Android SDK/NDK ---
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
+    # --- Setup JDK ---
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
       with:
-        api-level: 34
-        ndk-version: 25.1.8937393
-        cmake-version: 3.27.3
-        build-tools: 34.0.0
+        distribution: temurin
+        java-version: 17
 
-    # --- Pre-generate patches and host binaries ---
-    - name: Install build dependencies
-      run: sudo apt-get update && sudo apt-get install -y clang make file
-
-    - name: Generate patch binaries
+    # --- Install Android SDK + NDK ---
+    - name: Download Android SDK Command Line Tools
       run: |
-        cd $GITHUB_WORKSPACE
-        # Run your host-side tools (file_to_c, N64Recomp, etc.)
-        ./N64Recomp patches.toml
-        file_to_c patches/patches.bin mm_patches_bin RecompiledPatches/patches_bin.c RecompiledPatches/patches_bin.h
+        mkdir -p $ANDROID_HOME/cmdline-tools
+        curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
+        unzip -q cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
+        rm cmdline-tools.zip
 
-    # --- Build with Gradle ---
-    - name: Build APK
+    - name: Install SDK components
       run: |
-        cd android
-        ./gradlew assembleDebug --stacktrace
+        yes | $ANDROID_HOME/cmdline-tools/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME "platforms;android-34" "platform-tools" "build-tools;34.0.0" "ndk;25.1.8937393"
 
-    # --- Upload APK artifact ---
+    # --- Pre-generate host-only files ---
+    - name: Build host tools (N64Recomp, file_to_c)
+      run: |
+        mkdir -p build-host
+        cd build-host
+        cmake ../ -DCMAKE_BUILD_TYPE=Release
+        cmake --build . --target N64Recomp
+
+    - name: Generate patches_bin.c and other host files
+      run: |
+        ./build-host/N64Recomp ../patches/patches.toml
+        file_to_c ../patches/patches.bin mm_patches_bin ../RecompiledPatches/patches_bin.c ../RecompiledPatches/patches_bin.h
+        # Add shader generation if needed
+        # build_vertex_shader ...
+
+    # --- Android Gradle build ---
+    - name: Build Android APK
+      working-directory: android
+      run: ./gradlew assembleDebug --no-daemon
+
     - name: Upload APK
       uses: actions/upload-artifact@v3
       with:
-        name: Starfox64Recompiled-debug.apk
+        name: Starfox64Recompiled-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
