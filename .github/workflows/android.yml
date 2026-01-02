@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # allows manual trigger from Actions tab
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -22,7 +22,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y imagemagick
+          sudo apt-get install -y imagemagick unzip wget
 
       # 3. Set up JDK 17
       - name: Set up JDK 17
@@ -31,14 +31,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4. Setup Android SDK
+      # 4. Setup Android SDK with proper CMake
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           api-level: 34
           build-tools: 34.0.0
           ndk: 25.1.8937393
-          cmake: 3.22.1
+          cmake: 3.27.3
+
+      # 4a. Verify CMake installed correctly
+      - name: Verify CMake
+        run: $ANDROID_HOME/cmake/3.27.3/bin/cmake --version
 
       # 5. Cache Gradle for faster builds
       - name: Cache Gradle
@@ -56,19 +60,16 @@ jobs:
         run: |
           set -e -o pipefail
 
-          # Create mipmap directories
           for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p android/app/src/main/res/mipmap-$size
           done
 
-          # Generate launcher icons from the correct path
           convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-          # Copy game assets
           mkdir -p android/app/src/main/assets
           cp -r assets/* android/app/src/main/assets/
 
