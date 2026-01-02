@@ -17,42 +17,35 @@ jobs:
       PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$JAVA_HOME/bin:$PATH
 
     steps:
-      # 1. Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Ensure system dependencies are present
-      - name: Install required packages
+      - name: Install required system packages
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip tar curl git
 
-      # 3. Download Android command-line tools if not already present
       - name: Setup Android SDK
         run: |
           mkdir -p $ANDROID_HOME/cmdline-tools
           cd $ANDROID_HOME/cmdline-tools
-          if [ ! -d "latest" ]; then
+          if [ ! -d "latest/cmdline-tools" ]; then
             wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
             unzip cmdline-tools.zip -d latest
             rm cmdline-tools.zip
           fi
 
-      # 4. Accept licenses non-interactively
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
-      # 5. Install required SDK packages
       - name: Install SDK packages
         run: |
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
-      # 6. Ensure Gradle wrapper is executable
-      - name: Make gradlew executable
+      - name: Make Gradle wrapper executable
         run: chmod +x ./android/gradlew
 
-      # 7. Build APK
       - name: Build Debug APK
         run: ./android/gradlew assembleDebug
