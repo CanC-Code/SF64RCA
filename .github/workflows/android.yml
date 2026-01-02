@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch:  # allows manual trigger from Actions tab
 
 jobs:
   build-android:
@@ -22,7 +22,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y imagemagick unzip wget
+          sudo apt-get install -y imagemagick wget unzip
 
       # 3. Set up JDK 17
       - name: Set up JDK 17
@@ -31,20 +31,28 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4. Setup Android SDK with proper CMake
+      # 4. Setup Android SDK (without CMake, we'll install manually)
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           api-level: 34
           build-tools: 34.0.0
           ndk: 25.1.8937393
-          cmake: 3.27.3
+          cmake: 3.22.1  # temporary, will override with manual download
 
-      # 4a. Verify CMake installed correctly
+      # 5. Download and install CMake 3.27.3 manually
+      - name: Install CMake 3.27.3
+        run: |
+          wget https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.tar.gz
+          tar -xzf cmake-3.27.3-linux-x86_64.tar.gz
+          sudo mv cmake-3.27.3-linux-x86_64 /opt/cmake-3.27.3
+          echo "/opt/cmake-3.27.3/bin" >> $GITHUB_PATH
+
+      # 6. Verify CMake version
       - name: Verify CMake
-        run: $ANDROID_HOME/cmake/3.27.3/bin/cmake --version
+        run: cmake --version
 
-      # 5. Cache Gradle for faster builds
+      # 7. Cache Gradle for faster builds
       - name: Cache Gradle
         uses: actions/cache@v3
         with:
@@ -55,34 +63,37 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # 6. Prepare Android resources (launcher icons and assets)
+      # 8. Prepare Android resources (launcher icons and assets)
       - name: Prepare Android resources
         run: |
           set -e -o pipefail
 
+          # Create mipmap directories
           for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p android/app/src/main/res/mipmap-$size
           done
 
+          # Generate launcher icons from the correct path
           convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
+          # Copy game assets
           mkdir -p android/app/src/main/assets
           cp -r assets/* android/app/src/main/assets/
 
-      # 7. Make gradlew executable
+      # 9. Make gradlew executable
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # 8. Build the APK
+      # 10. Build the APK
       - name: Assemble Debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # 9. Upload APK artifact
+      # 11. Upload APK artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
