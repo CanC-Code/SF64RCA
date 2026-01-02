@@ -16,12 +16,6 @@ jobs:
       PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$JAVA_HOME/bin:$PATH
 
     steps:
-      # Install system dependencies before checkout
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y tar unzip wget curl git
-
       # Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
