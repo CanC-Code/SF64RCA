@@ -24,15 +24,13 @@ android {
             minifyEnabled false
         }
         debug {
-            // Debug-specific options if needed
         }
     }
 
     externalNativeBuild {
         cmake {
             path "../CMakeLists.txt"
-            version "3.27.3"
-            arguments "-DCMAKE_CXX_STANDARD=20"
+            arguments "-DCMAKE_CXX_STANDARD=20", "-DANDROID_PLATFORM=android-34"
         }
     }
 
@@ -52,5 +50,4 @@ android {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
-    // Add any additional dependencies here if needed
 }
