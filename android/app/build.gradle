@@ -4,6 +4,7 @@ plugins {
 }
 
 android {
+    // The namespace replaces the old 'package' attribute in the manifest
     namespace "com.canc.starfox64"
     compileSdk 34
 
@@ -21,6 +22,7 @@ android {
         }
 
         ndk {
+            // Only build for 64-bit ARM
             abiFilters "arm64-v8a"
         }
     }
@@ -28,20 +30,39 @@ android {
     buildTypes {
         release {
             minifyEnabled false
+            // Optionally, you can enable proguard if needed:
+            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // Debug-specific options if needed
         }
     }
 
     externalNativeBuild {
         cmake {
             path "../CMakeLists.txt"
+            version "3.27.3" // Optional: specify CMake version if needed
         }
     }
 
     buildFeatures {
         prefab true
     }
+
+    // Optional: Java/Kotlin compatibility settings
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 }
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    // Add any additional dependencies here if needed, for example:
+    // implementation "androidx.appcompat:appcompat:1.6.1"
+    // implementation "androidx.core:core-ktx:1.12.0"
 }
