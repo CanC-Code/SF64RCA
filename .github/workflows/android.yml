@@ -61,12 +61,12 @@ jobs:
             mkdir -p android/app/src/main/res/mipmap-$size
           done
 
-          # Generate launcher icons
-          convert assets/icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert assets/icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert assets/icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert assets/icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert assets/icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          # Generate launcher icons from the correct path
+          convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
           # Copy game assets
           mkdir -p android/app/src/main/assets
