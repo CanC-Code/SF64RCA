@@ -25,7 +25,7 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      # Step 3: Download Android SDK + NDK
+      # Step 3: Download Android SDK & NDK
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v2
         with:
@@ -33,20 +33,21 @@ jobs:
           ndk-version: 25.2.9519653
           cmake-version: 3.25.2
           build-tools: 34.0.0
+          accept-licenses: true
 
-      # Step 4: Ensure Gradle wrapper is executable
+      # Step 4: Make Gradle wrapper executable
       - name: Make Gradlew Executable
         run: chmod +x ./gradlew
 
-      # Step 5: Build CMake libraries via Gradle
+      # Step 5: Build CMake libraries and APK via Gradle
       - name: Build with Gradle (Release)
         run: ./gradlew assembleRelease --stacktrace
 
       # Step 6: List APK output
       - name: List APK
-        run: ls -R app/build/outputs/apk
+        run: ls -R app/build/outputs/apk/release
 
-      # Step 7: Upload APK as artifact
+      # Step 7: Upload APK artifact (v4)
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
