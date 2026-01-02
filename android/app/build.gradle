@@ -1,6 +1,6 @@
 plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
+    id 'com.android.application' version '8.3.1'
+    id 'org.jetbrains.kotlin.android' version '1.9.0'
 }
 
 android {
@@ -44,7 +44,6 @@ android {
 
     externalNativeBuild {
         cmake {
-            // Root CMakeLists.txt (matches your logs)
             path file("../../CMakeLists.txt")
             version "3.27.3"
         }
