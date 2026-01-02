@@ -64,17 +64,11 @@ jobs:
           "platform-tools" \
           "platforms;android-34" \
           "build-tools;34.0.0" \
-          "ndk;25.1.8937393"
+          "ndk;26.1.1" \
+          "cmake;3.27.3"
 
-    - name: Install CMake 3.27.3 (fallback)
-      run: |
-        set -e -o pipefail
-        if [ ! -d "$ANDROID_HOME/cmake/3.27.3" ]; then
-          echo "Downloading CMake 3.27.3 directly..."
-          mkdir -p $ANDROID_HOME/cmake/3.27.3
-          curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.tar.gz \
-            | tar -xz --strip-components=1 -C $ANDROID_HOME/cmake/3.27.3
-        fi
+    - name: Set ANDROID_NDK environment variable
+      run: echo "ANDROID_NDK=$ANDROID_HOME/ndk/26.1.1" >> $GITHUB_ENV
 
     - name: Add CMake to PATH
       run: echo "$ANDROID_HOME/cmake/3.27.3/bin" >> $GITHUB_PATH
