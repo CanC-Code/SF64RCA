@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # allows manual trigger
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -22,7 +22,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y imagemagick curl unzip
+          sudo apt-get install -y imagemagick curl ninja-build
 
       # 3. Set up JDK 17
       - name: Set up JDK 17
@@ -38,32 +38,29 @@ jobs:
           api-level: 34
           build-tools: 34.0.0
           ndk: 25.1.8937393
-          cmake: 3.22.1   # This is used by Gradle initially; we will override with 3.27.3
+          cmake: 3.22.1  # This is the one Gradle expects; we'll also override below
 
-      # 5. Install CMake 3.27.3 and Ninja
-      - name: Install CMake 3.27.3 and Ninja
+      # 5. Install latest CMake (3.27.3) manually
+      - name: Install CMake 3.27.3
         run: |
-          # Ensure target directory exists
           sudo mkdir -p /opt/cmake-3.27.3
           sudo chown $USER:$USER /opt/cmake-3.27.3
 
-          # Download and extract CMake
           curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh -o cmake.sh
           chmod +x cmake.sh
           ./cmake.sh --skip-license --prefix=/opt/cmake-3.27.3
 
-          # Install Ninja via apt
-          sudo apt-get install -y ninja-build
-
-          # Symlink CMake and Ninja
+          # Symlink CMake
           sudo ln -sf /opt/cmake-3.27.3/bin/cmake /usr/local/bin/cmake
-          sudo ln -sf $(which ninja) /usr/local/bin/ninja
+
+          # Symlink Ninja safely
+          sudo ln -sf $(which ninja) /usr/local/bin/ninja || true
 
           # Confirm versions
           cmake --version
           ninja --version
 
-      # 6. Cache Gradle for faster builds
+      # 6. Cache Gradle
       - name: Cache Gradle
         uses: actions/cache@v3
         with:
@@ -78,20 +75,14 @@ jobs:
       - name: Prepare Android resources
         run: |
           set -e -o pipefail
-
-          # Create mipmap directories
           for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p android/app/src/main/res/mipmap-$size
           done
-
-          # Generate launcher icons from the correct path
           convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-          # Copy game assets
           mkdir -p android/app/src/main/assets
           cp -r assets/* android/app/src/main/assets/
 
@@ -99,7 +90,7 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # 9. Build the APK
+      # 9. Build APK
       - name: Assemble Debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
