@@ -2,59 +2,64 @@ name: Android Build
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repository
+      # 1. Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # 2. Install system dependencies (tar, wget, unzip, curl, git, openjdk-17)
-      - name: Install required packages
+      # 2. System dependencies
+      - name: Install system packages
         run: |
           sudo apt-get update
           sudo apt-get install -y tar unzip wget curl git openjdk-17-jdk
 
-      # 3. Set environment variables for Android SDK and Java
+      # 3. Environment
       - name: Set environment variables
         run: |
           echo "ANDROID_HOME=${GITHUB_WORKSPACE}/android-sdk" >> $GITHUB_ENV
           echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
-          echo "${GITHUB_WORKSPACE}/android-sdk/cmdline-tools/latest/bin:/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH" >> $GITHUB_PATH
+          echo "${GITHUB_WORKSPACE}/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> $GITHUB_PATH
 
-      # 4. Setup Android SDK
-      - name: Setup Android SDK
+      # 4. Download Android command-line tools
+      - name: Install Android SDK cmdline-tools
         run: |
           mkdir -p $ANDROID_HOME/cmdline-tools
           cd $ANDROID_HOME/cmdline-tools
-          if [ ! -d "latest/cmdline-tools" ]; then
-            wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-            unzip cmdline-tools.zip -d latest
-            rm cmdline-tools.zip
-          fi
 
-      # 5. Accept SDK licenses
-      - name: Accept Android SDK licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip commandlinetools-linux-9477386_latest.zip
+          rm commandlinetools-linux-9477386_latest.zip
 
-      # 6. Install required SDK packages
+          # Fix directory layout
+          mv cmdline-tools latest
+
+      # 5. Accept licenses
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses
+
+      # 6. Install SDK components
       - name: Install SDK packages
         run: |
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-33" \
+            "build-tools;33.0.2" \
+            "ndk;25.1.8937393"
 
-      # 7. Make Gradle wrapper executable
+      # 7. Gradle wrapper
       - name: Make gradlew executable
-        run: chmod +x ./android/gradlew
+        run: chmod +x android/gradlew
 
       # 8. Build APK
       - name: Build Debug APK
-        run: ./android/gradlew assembleDebug
+        run: |
+          cd android
+          ./gradlew assembleDebug
