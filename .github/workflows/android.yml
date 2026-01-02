@@ -22,7 +22,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y imagemagick wget unzip
+          sudo apt-get install -y imagemagick curl unzip
 
       # 3. Set up JDK 17
       - name: Set up JDK 17
@@ -31,26 +31,31 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 4. Setup Android SDK (without CMake, we'll install manually)
+      # 4. Setup Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           api-level: 34
           build-tools: 34.0.0
           ndk: 25.1.8937393
-          cmake: 3.22.1  # temporary, will override with manual download
+          cmake: 3.22.1  # temporary, we’ll override with 3.27.3
 
-      # 5. Download and install CMake 3.27.3 manually
-      - name: Install CMake 3.27.3
+      # 5. Download & setup CMake 3.27.3 manually
+      - name: Download CMake 3.27.3
         run: |
-          wget https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.tar.gz
-          tar -xzf cmake-3.27.3-linux-x86_64.tar.gz
-          sudo mv cmake-3.27.3-linux-x86_64 /opt/cmake-3.27.3
-          echo "/opt/cmake-3.27.3/bin" >> $GITHUB_PATH
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh -o cmake.sh
+          chmod +x cmake.sh
+          sudo ./cmake.sh --skip-license --prefix=/opt/cmake-3.27.3
+          sudo ln -sf /opt/cmake-3.27.3/bin/cmake /usr/local/bin/cmake
+          sudo ln -sf /opt/cmake-3.27.3/bin/ninja /usr/local/bin/ninja
+          cmake --version
 
-      # 6. Verify CMake version
-      - name: Verify CMake
-        run: cmake --version
+      # 6. Set Android NDK environment variables
+      - name: Set Android NDK environment
+        run: |
+          echo "ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/25.1.8937393" >> $GITHUB_ENV
+          echo "NDK_HOME=/usr/local/lib/android/sdk/ndk/25.1.8937393" >> $GITHUB_ENV
+          echo "PATH=/opt/cmake-3.27.3/bin:$PATH" >> $GITHUB_ENV
 
       # 7. Cache Gradle for faster builds
       - name: Cache Gradle
@@ -73,7 +78,7 @@ jobs:
             mkdir -p android/app/src/main/res/mipmap-$size
           done
 
-          # Generate launcher icons from the correct path
+          # Generate launcher icons
           convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
