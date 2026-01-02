@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Android SDK paths
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$PATH
 
     steps:
       # 1. Checkout repository
@@ -24,40 +24,43 @@ jobs:
         with:
           fetch-depth: 1
           clean: true
-          submodules: false
 
       # 2. Install system dependencies
       - name: Install required packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y tar unzip zip openjdk-17-jdk cmake ninja-build
+          sudo apt-get install -y tar unzip zip openjdk-17-jdk cmake ninja-build wget
 
-      # 3. Set up Android SDK environment
+      # 3. Download and setup Android SDK cmdline-tools
       - name: Setup Android SDK
         run: |
-          echo "ANDROID_HOME=${GITHUB_WORKSPACE}/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=${GITHUB_WORKSPACE}/android-sdk" >> $GITHUB_ENV
-          echo "${GITHUB_WORKSPACE}/android-sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_PATH
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          cd $ANDROID_HOME/cmdline-tools
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip
+          mv cmdline-tools latest
+          rm cmdline-tools.zip
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin:$PATH" >> $GITHUB_PATH
 
-      # 4. Accept Android licenses (required for Gradle build)
+      # 4. Accept Android SDK licenses
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
-      # 5. Set up Gradle wrapper
-      - name: Set up Gradle
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 8.3.1  # Adjust to match your project Gradle version
+      # 5. Install Android platform and build tools
+      - name: Install Android SDK packages
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       # 6. Build Android APK
-      - name: Build Debug APK
-        run: |
-          cd android
-          ./gradlew assembleDebug --no-daemon
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
 
-      # 7. Upload APK as artifact
-      - name: Upload Debug APK
+      # 7. Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SF64RCA-debug-apk
+          name: starfox64-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
