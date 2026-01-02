@@ -11,14 +11,13 @@ jobs:
 
     steps:
       # ------------------------------------------------------------
-      # 1. Checkout repository
+      # 1. Checkout
       # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # ------------------------------------------------------------
-      # 2. Install system dependencies
-      # (tar MUST exist before checkout extracts archives)
+      # 2. System dependencies
       # ------------------------------------------------------------
       - name: Install system packages
         run: |
@@ -32,7 +31,7 @@ jobs:
             openjdk-17-jdk
 
       # ------------------------------------------------------------
-      # 3. Define Android + Java environment (single source of truth)
+      # 3. Environment (single source of truth)
       # ------------------------------------------------------------
       - name: Set environment variables
         run: |
@@ -42,14 +41,14 @@ jobs:
           echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> $GITHUB_PATH
 
       # ------------------------------------------------------------
-      # 4. Remove conflicting SDK variables (CRITICAL)
+      # 4. Hard-disable ANDROID_SDK_ROOT
       # ------------------------------------------------------------
       - name: Remove conflicting SDK variables
         run: |
           echo "ANDROID_SDK_ROOT=" >> $GITHUB_ENV
 
       # ------------------------------------------------------------
-      # 5. Install Android command-line tools
+      # 5. Install Android SDK cmdline-tools
       # ------------------------------------------------------------
       - name: Install Android SDK cmdline-tools
         run: |
@@ -60,18 +59,17 @@ jobs:
           unzip commandlinetools-linux-9477386_latest.zip
           rm commandlinetools-linux-9477386_latest.zip
 
-          # Required directory layout:
           mv cmdline-tools latest
 
       # ------------------------------------------------------------
-      # 6. Accept Android SDK licenses
+      # 6. Accept licenses
       # ------------------------------------------------------------
       - name: Accept SDK licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
       # ------------------------------------------------------------
-      # 7. Install required SDK components
+      # 7. Install SDK packages
       # ------------------------------------------------------------
       - name: Install SDK packages
         run: |
@@ -82,13 +80,20 @@ jobs:
             "ndk;25.1.8937393"
 
       # ------------------------------------------------------------
-      # 8. Ensure Gradle wrapper is executable
+      # 8. FORCE SDK PATH INSIDE PROJECT (THIS IS THE KEY)
+      # ------------------------------------------------------------
+      - name: Write local.properties
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > android/local.properties
+
+      # ------------------------------------------------------------
+      # 9. Gradle wrapper permissions
       # ------------------------------------------------------------
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
       # ------------------------------------------------------------
-      # 9. Build APK
+      # 10. Build APK
       # ------------------------------------------------------------
       - name: Build Debug APK
         run: |
