@@ -11,22 +11,27 @@ jobs:
     name: Build APK
     runs-on: ubuntu-latest
 
-    env:
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
-      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$JAVA_HOME/bin:$PATH
-
     steps:
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install required system packages
+      # 2. Install system dependencies (tar, wget, unzip, curl, git, openjdk-17)
+      - name: Install required packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip tar curl git
+          sudo apt-get install -y tar unzip wget curl git openjdk-17-jdk
 
+      # 3. Set environment variables for Android SDK and Java
+      - name: Set environment variables
+        run: |
+          echo "ANDROID_HOME=${GITHUB_WORKSPACE}/android-sdk" >> $GITHUB_ENV
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+          echo "${GITHUB_WORKSPACE}/android-sdk/cmdline-tools/latest/bin:/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH" >> $GITHUB_PATH
+
+      # 4. Setup Android SDK
       - name: Setup Android SDK
         run: |
           mkdir -p $ANDROID_HOME/cmdline-tools
@@ -37,15 +42,19 @@ jobs:
             rm cmdline-tools.zip
           fi
 
+      # 5. Accept SDK licenses
       - name: Accept Android SDK licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
+      # 6. Install required SDK packages
       - name: Install SDK packages
         run: |
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
-      - name: Make Gradle wrapper executable
+      # 7. Make Gradle wrapper executable
+      - name: Make gradlew executable
         run: chmod +x ./android/gradlew
 
+      # 8. Build APK
       - name: Build Debug APK
         run: ./android/gradlew assembleDebug
