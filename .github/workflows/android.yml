@@ -1,12 +1,11 @@
-name: Android CI
+# .github/workflows/android-build.yml
+name: Android Build
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build:
@@ -14,49 +13,49 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      JAVA_HOME_17_X64: /usr/lib/jvm/adoptopenjdk-17-hotspot
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      JAVA_HOME_17_X64: /usr/lib/jvm/java-17-openjdk-amd64
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
 
     steps:
-      # 1. Checkout the repository
-      - name: Checkout repo
+      # 1. Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # 2. Setup JDK 17
-      - name: Setup JDK 17
+      # 2. Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v3
         with:
-          java-version: 17
           distribution: temurin
+          java-version: 17
           cache: gradle
 
-      # 3. Install Android SDK and command-line tools
+      # 3. Setup Android SDK, build tools, and NDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
         with:
           api-level: 34
           build-tools: 34.0.0
           ndk: 25.2.9519653
-          # Optional caching
-          cache: gradle
+          ndk-latest: false
+          components: platform-tools,cmdline-tools
 
       # 4. Accept all SDK licenses
-      - name: Accept SDK licenses
+      - name: Accept Android SDK licenses
         run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
 
-      # 5. Ensure gradlew is executable
-      - name: Make gradlew executable
+      # 5. Make Gradle wrapper executable
+      - name: Ensure gradlew is executable
         run: chmod +x ./android/gradlew
 
-      # 6. Assemble debug APK
+      # 6. Build the APK
       - name: Build Debug APK
-        run: ./android/gradlew assembleDebug
+        working-directory: ./android
+        run: ./gradlew assembleDebug --stacktrace
 
-      # 7. Upload APK as artifact
+      # 7. Upload APK artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SF64RCA-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: ./android/app/build/outputs/apk/debug/app-debug.apk
