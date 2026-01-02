@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
 
     steps:
       # Step 1: Checkout repo
@@ -26,7 +25,7 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      # Step 3: Download Android SDK + NDK
+      # Step 3: Set up Android SDK + NDK
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v2
         with:
@@ -35,15 +34,15 @@ jobs:
           cmake-version: 3.25.2
           build-tools: 34.0.0
 
-      # Step 4: Accept all SDK licenses
+      # Step 4: Accept SDK licenses
       - name: Accept SDK Licenses
-        run: yes | ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin/sdkmanager --licenses
+        run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses
 
-      # Step 5: Make Gradle wrapper executable
+      # Step 5: Ensure Gradle wrapper is executable
       - name: Make Gradlew Executable
         run: chmod +x ./android/gradlew
 
-      # Step 6: Build APK with Gradle
+      # Step 6: Build CMake libraries and APK via Gradle
       - name: Build with Gradle (Release)
         run: ./android/gradlew assembleRelease --stacktrace
 
@@ -51,7 +50,7 @@ jobs:
       - name: List APK
         run: ls -R android/app/build/outputs/apk
 
-      # Step 8: Upload APK artifact
+      # Step 8: Upload APK as artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
