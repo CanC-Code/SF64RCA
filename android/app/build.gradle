@@ -1,3 +1,6 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
 android {
     namespace "com.canc.starfox64"
     compileSdk 34
@@ -27,7 +30,6 @@ android {
             // Uses default debug key automatically
         }
         release {
-            // Can leave empty for now or disable entirely if not building release
             minifyEnabled false
         }
     }
@@ -47,4 +49,18 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    packaging {
+        resources {
+            excludes += [
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1"
+            ]
+        }
+    }
+}
+
+dependencies {
+    implementation "androidx.core:core-ktx:1.13.1"
+    implementation "androidx.appcompat:appcompat:1.7.0"
 }
