@@ -16,15 +16,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          submodules: false
 
       # 2. Set up JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
 
-      # 3. Setup Android SDK + NDK + CMake
+      # 3. Setup Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -44,8 +45,12 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # 5. Prepare Android resources
-      - name: Prepare Android resources
+      # 5. Install ImageMagick (without sudo)
+      - name: Install ImageMagick
+        uses: dawidd6/action-install-imagemagick@v1
+
+      # 6. Prepare Android resources: launcher icons and assets
+      - name: Generate launcher icons and copy assets
         run: |
           set -e
           for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
@@ -59,16 +64,16 @@ jobs:
           mkdir -p android/app/src/main/assets
           cp -r assets/* android/app/src/main/assets/
 
-      # 6. Make Gradle wrapper executable
+      # 7. Make gradlew executable
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # 7. Build the APK (debug)
+      # 8. Build the APK
       - name: Assemble Debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # 8. Upload APK artifact
+      # 9. Upload APK artifact
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
