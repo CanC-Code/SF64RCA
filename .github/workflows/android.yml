@@ -13,6 +13,7 @@ jobs:
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
+      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
 
     steps:
     - name: Checkout repository
@@ -46,6 +47,7 @@ jobs:
 
     - name: Download Android command-line tools
       run: |
+        set -e -o pipefail
         mkdir -p $ANDROID_HOME/cmdline-tools
         curl -L https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o cmdline-tools.zip
         unzip -q cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
@@ -57,6 +59,7 @@ jobs:
 
     - name: Install Android SDK components
       run: |
+        set -e -o pipefail
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
           "platform-tools" \
           "platforms;android-34" \
@@ -65,6 +68,7 @@ jobs:
 
     - name: Install CMake 3.27.3 (fallback)
       run: |
+        set -e -o pipefail
         if [ ! -d "$ANDROID_HOME/cmake/3.27.3" ]; then
           echo "Downloading CMake 3.27.3 directly..."
           mkdir -p $ANDROID_HOME/cmake/3.27.3
@@ -76,4 +80,7 @@ jobs:
       run: echo "$ANDROID_HOME/cmake/3.27.3/bin" >> $GITHUB_PATH
 
     - name: Build Android APK
-      run: cd android && ./gradlew assembleDebug --no-daemon
+      run: |
+        set -e -o pipefail
+        cd android
+        ./gradlew assembleDebug --no-daemon
