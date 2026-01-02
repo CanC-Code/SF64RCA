@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.18)
 
+# Minimum Android API for NDK
+set(ANDROID_PLATFORM android-34 CACHE STRING "Minimum Android API level")
+
 # Project name
 project(Starfox64Recompiled LANGUAGES C CXX)
 
@@ -7,7 +10,7 @@ project(Starfox64Recompiled LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# SDL2 path (we'll point to your lib/SDL2 or download via CMake)
+# SDL2 path
 set(SDL2_DIR ${CMAKE_SOURCE_DIR}/../lib/SDL2)
 
 # Add include directories
