@@ -1,12 +1,9 @@
-name: Build Starfox64 APK
+name: Build Starfox 64 APK
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -17,44 +14,46 @@ jobs:
       PATH: /opt/cmake-3.27.3/bin:$PATH
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
+      # 1. Install essential tools
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build unzip wget curl
+          sudo apt-get install -y tar curl unzip ninja-build git wget openjdk-17-jdk
 
-      - name: Install CMake 3.27.3
+      # 2. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 3. Install CMake 3.27.3
+      - name: Install CMake
         run: |
           sudo mkdir -p /opt/cmake-3.27.3
           sudo chown $USER:$USER /opt/cmake-3.27.3
           curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh -o cmake.sh
           chmod +x cmake.sh
           ./cmake.sh --skip-license --prefix=/opt/cmake-3.27.3
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 34
-          ndk: 25.2.9519653
-          cmake: 3.27.3
-          build-tools: 34.0.0
-
-      - name: Verify tools
-        run: |
+          sudo ln -sf /opt/cmake-3.27.3/bin/cmake /usr/local/bin/cmake
+          sudo ln -sf $(which ninja) /usr/local/bin/ninja
           cmake --version
           ninja --version
-          java -version
-          echo $ANDROID_SDK_ROOT
 
-      - name: Build Debug APK
+      # 4. Set up Android SDK environment
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+        with:
+          api-level: 34
+          ndk: 25
+          components: tools,platform-tools,build-tools-34.0.0
+
+      # 5. Build APK with Gradle
+      - name: Build APK
         run: |
           cd android
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK artifact
+      # 6. Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: starfox64-debug-apk
+          name: Starfox64-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
