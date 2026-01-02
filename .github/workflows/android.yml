@@ -13,42 +13,33 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
-      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$PATH:$JAVA_HOME_17_X64/bin
+      PATH: $PATH:${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$JAVA_HOME_17_X64/bin
 
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # 2️⃣ Install basic tools
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip wget tar
+      - name: Install required system packages
+        run: sudo apt-get update && sudo apt-get install -y unzip tar wget
 
-      # 3️⃣ Ensure Gradle wrapper is executable
-      - name: Make gradlew executable
+      - name: Ensure Gradle Wrapper is executable
         run: chmod +x ./android/gradlew
 
-      # 4️⃣ Install Android SDK cmdline-tools if missing
-      - name: Setup Android SDK
-        run: |
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          if [ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-            unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-            mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          fi
+      - name: Accept all Android SDK licenses
+        run: yes | ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
 
-      # 5️⃣ Accept all licenses
-      - name: Accept Android SDK licenses
-        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-
-      # 6️⃣ Install required SDK components
       - name: Install SDK components
         run: |
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-      # 7️⃣ Build APK using Gradle
-      - name: Build debug APK
-        run: ./android/gradlew assembleDebug
+      - name: Build Debug APK
+        working-directory: ./android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SF64RCA-debug-apk
+          path: ./android/app/build/outputs/apk/debug/app-debug.apk
