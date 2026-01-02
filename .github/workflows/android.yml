@@ -2,9 +2,9 @@ name: Android Build
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -13,36 +13,31 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
-      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$PATH:$JAVA_HOME_17_X64/bin
+      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$PATH
 
     steps:
-      - name: Install required packages
-        run: sudo apt-get update && sudo apt-get install -y unzip tar wget
-
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
-      - name: Setup Android SDK
+      - name: Verify required tools
         run: |
-          mkdir -p $ANDROID_HOME/cmdline-tools
-          wget -O cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip cmdline-tools.zip
-          mkdir -p $ANDROID_HOME/cmdline-tools/latest
-          mv cmdline-tools/* $ANDROID_HOME/cmdline-tools/latest/
-          rm -rf cmdline-tools cmdline-tools.zip
-
-      - name: Accept SDK licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-
-      - name: Install SDK components
-        run: |
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+          echo "Verifying unzip, tar, wget..."
+          which unzip || echo "unzip missing"
+          which tar || echo "tar missing"
+          which wget || echo "wget missing"
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./android/gradlew
 
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+
+      - name: Install required SDK components
+        run: |
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+
       - name: Build Debug APK
-        run: ./android/gradlew assembleDebug
+        run: ./android/gradlew assembleDebug --no-daemon
+
+      - name: List APK output
+        run: ls -R ./android/app/build/outputs/apk/debug/
