@@ -10,92 +10,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ------------------------------------------------------------
-      # 1. Checkout
-      # ------------------------------------------------------------
+      # 1. Checkout source
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------
-      # 2. System dependencies
-      # ------------------------------------------------------------
-      - name: Install system packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            tar \
-            unzip \
-            wget \
-            curl \
-            git \
-            openjdk-17-jdk
+      # 2. Set up Java 17 (required by modern AGP)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-      # ------------------------------------------------------------
-      # 3. Environment (single source of truth)
-      # ------------------------------------------------------------
-      - name: Set environment variables
-        run: |
-          echo "ANDROID_HOME=${GITHUB_WORKSPACE}/android-sdk" >> $GITHUB_ENV
-          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
-          echo "${GITHUB_WORKSPACE}/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> $GITHUB_PATH
+      # 3. Set up Android SDK (official action)
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      # ------------------------------------------------------------
-      # 4. Hard-disable ANDROID_SDK_ROOT
-      # ------------------------------------------------------------
-      - name: Remove conflicting SDK variables
-        run: |
-          echo "ANDROID_SDK_ROOT=" >> $GITHUB_ENV
+      # 4. Accept Android SDK licenses
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses
 
-      # ------------------------------------------------------------
-      # 5. Install Android SDK cmdline-tools
-      # ------------------------------------------------------------
-      - name: Install Android SDK cmdline-tools
-        run: |
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          cd "$ANDROID_HOME/cmdline-tools"
-
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip commandlinetools-linux-9477386_latest.zip
-          rm commandlinetools-linux-9477386_latest.zip
-
-          mv cmdline-tools latest
-
-      # ------------------------------------------------------------
-      # 6. Accept licenses
-      # ------------------------------------------------------------
-      - name: Accept SDK licenses
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-
-      # ------------------------------------------------------------
-      # 7. Install SDK packages
-      # ------------------------------------------------------------
+      # 5. Install required SDK components
       - name: Install SDK packages
         run: |
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+          sdkmanager \
             "platform-tools" \
-            "platforms;android-33" \
-            "build-tools;33.0.2" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
             "ndk;25.1.8937393"
 
-      # ------------------------------------------------------------
-      # 8. FORCE SDK PATH INSIDE PROJECT (THIS IS THE KEY)
-      # ------------------------------------------------------------
-      - name: Write local.properties
+      # 6. Ensure no legacy SDK variable conflicts
+      - name: Normalize Android environment
         run: |
-          echo "sdk.dir=${ANDROID_HOME}" > android/local.properties
+          echo "ANDROID_SDK_ROOT=" >> $GITHUB_ENV
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
 
-      # ------------------------------------------------------------
-      # 9. Gradle wrapper permissions
-      # ------------------------------------------------------------
+      # 7. Make Gradle wrapper executable
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # ------------------------------------------------------------
-      # 10. Build APK
-      # ------------------------------------------------------------
+      # 8. Build Debug APK
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
