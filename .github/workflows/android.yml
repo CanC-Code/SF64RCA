@@ -2,9 +2,9 @@ name: Android Build
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
   build:
@@ -13,33 +13,34 @@ jobs:
     env:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
       JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
-      PATH: $PATH:${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$JAVA_HOME_17_X64/bin
+      # Full PATH to include system binaries, SDK tools, and Java
+      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$JAVA_HOME_17_X64/bin
 
     steps:
+      # 1. Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install required system packages
-        run: sudo apt-get update && sudo apt-get install -y unzip tar wget
-
-      - name: Ensure Gradle Wrapper is executable
+      # 2. Make gradlew executable
+      - name: Make Gradle Wrapper Executable
         run: chmod +x ./android/gradlew
 
-      - name: Accept all Android SDK licenses
-        run: yes | ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+      # 3. Accept Android SDK licenses
+      - name: Accept Android SDK Licenses
+        run: yes | ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin/sdkmanager --licenses
 
-      - name: Install SDK components
+      # 4. Install required SDK packages
+      - name: Install SDK Packages
         run: |
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+          ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;25.2.9519653"
 
+      # 5. Assemble debug APK
       - name: Build Debug APK
         working-directory: ./android
         run: ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SF64RCA-debug-apk
-          path: ./android/app/build/outputs/apk/debug/app-debug.apk
