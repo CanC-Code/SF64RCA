@@ -19,6 +19,9 @@ jobs:
       PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:$PATH
 
     steps:
+      # ---------------------------
+      # Checkout source code
+      # ---------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -26,33 +29,88 @@ jobs:
           clean: true
           submodules: false
 
+      # ---------------------------
+      # Install system dependencies
+      # ---------------------------
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y tar unzip zip openjdk-17-jdk cmake ninja-build wget
+          sudo apt-get install -y \
+            unzip \
+            zip \
+            wget \
+            curl \
+            tar \
+            imagemagick \
+            openjdk-17-jdk \
+            cmake \
+            ninja-build
 
+      # ---------------------------
+      # Setup Android SDK
+      # ---------------------------
       - name: Setup Android SDK
         run: |
           mkdir -p $ANDROID_HOME/cmdline-tools
           cd $ANDROID_HOME/cmdline-tools
           if [ ! -d latest ]; then
+            echo "Downloading Android command-line tools..."
             wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
             unzip cmdline-tools.zip
             mv cmdline-tools latest
             rm cmdline-tools.zip
           fi
+
+          echo "Accepting Android SDK licenses..."
           yes | sdkmanager --licenses
+
+          echo "Installing required SDK components..."
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.1.8937393"
 
+      # ---------------------------
+      # Cache Gradle dependencies
+      # ---------------------------
       - name: Cache Gradle
         uses: actions/cache@v3
         with:
           path: ~/.gradle/caches
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
+      # ---------------------------
+      # Prepare Android resources
+      # ---------------------------
+      - name: Generate launcher icons and copy assets
+        run: |
+          set -e -o pipefail
+
+          # Create mipmap directories
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+
+          # Generate launcher icons from 512px source
+          ICON_SRC=assets/icons/512.png
+          convert $ICON_SRC -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert $ICON_SRC -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert $ICON_SRC -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert $ICON_SRC -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert $ICON_SRC -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          # Copy all game assets
+          mkdir -p android/app/src/main/assets
+          cp -r assets/* android/app/src/main/assets/
+
+      # ---------------------------
+      # Build APK
+      # ---------------------------
       - name: Assemble Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
+      # ---------------------------
+      # Upload APK artifact
+      # ---------------------------
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
