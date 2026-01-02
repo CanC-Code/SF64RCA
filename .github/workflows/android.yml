@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch:  # allows manual trigger
 
 jobs:
   build-android:
@@ -38,27 +38,28 @@ jobs:
           api-level: 34
           build-tools: 34.0.0
           ndk: 25.1.8937393
-          cmake: 3.27.3
+          cmake: 3.22.1   # This is used by Gradle initially; we will override with 3.27.3
 
-      # 5. Install CMake 3.27.3 manually (safe)
-      - name: Install CMake 3.27.3
+      # 5. Install CMake 3.27.3 and Ninja
+      - name: Install CMake 3.27.3 and Ninja
         run: |
           # Ensure target directory exists
           sudo mkdir -p /opt/cmake-3.27.3
           sudo chown $USER:$USER /opt/cmake-3.27.3
 
-          # Download installer
+          # Download and extract CMake
           curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh -o cmake.sh
           chmod +x cmake.sh
-
-          # Extract as normal user
           ./cmake.sh --skip-license --prefix=/opt/cmake-3.27.3
 
-          # Symlink binaries for system-wide use
-          sudo ln -sf /opt/cmake-3.27.3/bin/cmake /usr/local/bin/cmake
-          sudo ln -sf /opt/cmake-3.27.3/bin/ninja /usr/local/bin/ninja
+          # Install Ninja via apt
+          sudo apt-get install -y ninja-build
 
-          # Confirm
+          # Symlink CMake and Ninja
+          sudo ln -sf /opt/cmake-3.27.3/bin/cmake /usr/local/bin/cmake
+          sudo ln -sf $(which ninja) /usr/local/bin/ninja
+
+          # Confirm versions
           cmake --version
           ninja --version
 
@@ -73,18 +74,24 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      # 7. Prepare Android resources (icons and assets)
+      # 7. Prepare Android resources
       - name: Prepare Android resources
         run: |
           set -e -o pipefail
+
+          # Create mipmap directories
           for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p android/app/src/main/res/mipmap-$size
           done
+
+          # Generate launcher icons from the correct path
           convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
           convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          # Copy game assets
           mkdir -p android/app/src/main/assets
           cp -r assets/* android/app/src/main/assets/
 
