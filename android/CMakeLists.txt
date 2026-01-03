@@ -48,17 +48,16 @@ if(NOT TARGET SDL2::SDL2)
 endif()
 
 # -------------------------------
-# Disable NativeFileDialog for Android
+# Force-disable NativeFileDialog for Android
 # -------------------------------
-# Force internal backend and skip pkg-config/GTK
 set(BUILD_NFD OFF CACHE BOOL "" FORCE)
 set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
-add_definitions(-DNFD_USE_STANDALONE)
+set(NFD_BUILD OFF CACHE BOOL "" FORCE)
 
 # -------------------------------
 # External libraries
 # -------------------------------
-# Add rt64 AFTER BUILD_NFD OFF is set
+# RT64 (NFD disabled)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 set(BUILD_SHARED_LIBS OFF)
 
