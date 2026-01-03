@@ -17,6 +17,13 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: recursive
+        fetch-depth: 0
+
+    # --- Initialize git submodules if not already ---
+    - name: Initialize submodules
+      run: |
+        git submodule update --init --recursive
+        echo "Submodules initialized"
 
     # --- Install minimal system dependencies ---
     - name: Install system dependencies
@@ -152,7 +159,46 @@ jobs:
     # --- Build APK ---
     - name: Build Android APK
       working-directory: android
-      run: ./gradlew assembleDebug --no-daemon --stacktrace
+      run: |
+        echo "Building APK with native libraries..."
+        ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build.log
+        
+    # --- Verify native libraries were built ---
+    - name: Verify native libraries
+      run: |
+        echo "=========================================="
+        echo "CHECKING FOR COMPILED NATIVE LIBRARIES"
+        echo "=========================================="
+        
+        # Check build directory for .so files
+        echo "Searching for .so files in build directory..."
+        find android/app/build -name "*.so" -type f || echo "⚠️ No .so files found in build directory"
+        
+        echo ""
+        echo "Checking specific architecture directories..."
+        for arch in arm64-v8a armeabi-v7a x86_64 x86; do
+          if [ -d "android/app/build/intermediates/cmake/debug/obj/$arch" ]; then
+            echo "✅ Found $arch directory"
+            ls -lh "android/app/build/intermediates/cmake/debug/obj/$arch" || true
+          else
+            echo "⚠️ $arch directory not found"
+          fi
+        done
+        
+        echo ""
+        echo "Checking CMake build logs..."
+        if [ -f "android/build.log" ]; then
+          if grep -q "Build command: cmake" android/build.log; then
+            echo "✅ CMake was invoked during build"
+          else
+            echo "❌ CMake was NOT invoked - native build failed!"
+          fi
+          
+          if grep -q "error:" android/build.log; then
+            echo "⚠️ Build errors detected:"
+            grep "error:" android/build.log | head -20
+          fi
+        fi
 
     # --- COMPREHENSIVE APK DEBUGGING ---
     - name: Debug APK - Basic Info
