@@ -118,6 +118,13 @@ file(GLOB DYNAMIC_SHADER_SOURCES ${CMAKE_SOURCE_DIR}/../app/src/main/cshaders/*.
 file(GLOB DYNAMIC_MOD_SOURCES ${CMAKE_SOURCE_DIR}/../app/src/main/cmods/*.c)
 file(GLOB DYNAMIC_PATCH_SOURCES ${CMAKE_SOURCE_DIR}/../app/src/main/cpatches/*.c)
 
+# Include any generated sources from build folder
+file(GLOB GENERATED_SOURCES
+    ${CMAKE_BINARY_DIR}/generated/cshaders/*.c
+    ${CMAKE_BINARY_DIR}/generated/cmods/*.c
+    ${CMAKE_BINARY_DIR}/generated/cpatches/*.c
+)
+
 add_library(starfox64recompiled SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/cpp/SDL_main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/cpp/main_android_wrapper.cpp
@@ -125,6 +132,7 @@ add_library(starfox64recompiled SHARED
     ${DYNAMIC_SHADER_SOURCES}
     ${DYNAMIC_MOD_SOURCES}
     ${DYNAMIC_PATCH_SOURCES}
+    ${GENERATED_SOURCES}
 )
 
 # -------------------------------
@@ -151,6 +159,15 @@ target_include_directories(starfox64recompiled PRIVATE
     ${CMAKE_SOURCE_DIR}/../app/src/main/cshaders
     ${CMAKE_SOURCE_DIR}/../app/src/main/cmods
     ${CMAKE_SOURCE_DIR}/../app/src/main/cpatches
+)
+
+# -------------------------------
+# Compiler options for main library
+# -------------------------------
+target_compile_options(starfox64recompiled PRIVATE
+    -fno-strict-aliasing
+    -Wno-unused-variable
+    -Wno-implicit-function-declaration
 )
 
 # -------------------------------
@@ -183,4 +200,4 @@ set_target_properties(starfox64recompiled PROPERTIES
 # Notes
 # -------------------------------
 # ROM-dependent preprocessing steps are deferred to runtime.
-# First-launch the app should prompt the user to supply the Starfox64 ROM.
+# On first launch, the app should prompt the user to supply the Starfox64 ROM.
