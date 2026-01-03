@@ -19,6 +19,13 @@ android {
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
         }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++20 -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration"
+                arguments "-DANDROID_PLATFORM=android-24", "-DANDROID_STL=c++_shared"
+            }
+        }
     }
 
     buildTypes {
@@ -51,24 +58,10 @@ android {
         }
     }
 
-    // -------------------------------
-    // External native build (CMake)
-    // -------------------------------
     externalNativeBuild {
         cmake {
-            path = file("CMakeLists.txt")
-            version = "3.22.1"
-
-            // C++ flags
-            arguments += [
-                "-DANDROID_PLATFORM=android-24",
-                "-DANDROID_STL=c++_shared",
-                "-DCMAKE_CXX_FLAGS=-std=c++20 -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration",
-                // Paths for generated files (CMake will pick up from these directories)
-                "-DCSHADERS_GENERATED=${buildDir}/generated/cshaders",
-                "-DCMODS_GENERATED=${buildDir}/generated/cmods",
-                "-DCPATCHES_GENERATED=${buildDir}/generated/cpatches"
-            ]
+            path "CMakeLists.txt"
+            version "3.22.1"
         }
     }
 }
@@ -76,31 +69,44 @@ android {
 // -------------------------------
 // Preprocessing dynamic assets
 // -------------------------------
-def fileToCExecutable = "../file_to_c" // adjust if needed
-def dynamicDirs = ["cshaders", "cmods", "cpatches"]
+def fileToCExecutable = "../file_to_c" // adjust path if needed
+def dynamicDirs = [
+    "cshaders",
+    "cmods",
+    "cpatches"
+]
+
+def generatedSourcesMap = [:]
 
 dynamicDirs.each { dirName ->
-    def srcDir = file("../app/src/main/${dirName}")
-    def outDir = file("${buildDir}/generated/${dirName}")
-    outDir.mkdirs()
+    def dir = file("../app/src/main/${dirName}")
+    fileTree(dir).matching { include "**/*.nrm" }.files.each { File f ->
+        def outC = file("${buildDir}/generated/${dirName}/${f.nameWithoutExtension}.c")
+        def outH = file("${buildDir}/generated/${dirName}/${f.nameWithoutExtension}.h")
 
-    fileTree(srcDir).matching { include "**/*.nrm" }.files.each { File f ->
-        def outC = file("${outDir}/${f.nameWithoutExtension}.c")
-        def outH = file("${outDir}/${f.nameWithoutExtension}.h")
-
-        // Create generation task for this file
-        def taskName = "generate${f.nameWithoutExtension.capitalize()}"
-        tasks.register(taskName, Exec) {
+        tasks.register("generate${f.nameWithoutExtension.capitalize()}", Exec) {
             inputs.file f
             outputs.files outC, outH
             commandLine fileToCExecutable, f.absolutePath, f.nameWithoutExtension, outC.absolutePath, outH.absolutePath
         }
 
-        // Make sure CMake build depends on this generation
-        tasks.matching { it.name.startsWith("externalNativeBuild") }.configureEach {
-            dependsOn taskName
+        // Collect generated source paths for CMake
+        if (!generatedSourcesMap.containsKey(dirName)) {
+            generatedSourcesMap[dirName] = []
         }
+        generatedSourcesMap[dirName] << outC.absolutePath
     }
+}
+
+// Pass generated files to CMake via Gradle properties
+afterEvaluate {
+    def cmakeArgs = []
+    generatedSourcesMap.each { dirName, filesList ->
+        def varName = "${dirName.toUpperCase()}_GENERATED"
+        cmakeArgs += "-D${varName}=${filesList.join(';')}"
+    }
+
+    android.defaultConfig.externalNativeBuild.cmake.arguments.addAll(cmakeArgs)
 }
 
 // -------------------------------
@@ -111,7 +117,6 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
