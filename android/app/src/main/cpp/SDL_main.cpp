@@ -88,53 +88,94 @@ static void show_error(const char* msg) {
 // -------------------------------
 // Android SAF ROM utilities
 // -------------------------------
-static std::filesystem::path safUriToPath(JNIEnv* env, jobject context, const char* uriStr) {
-    // Convert URI to FileDescriptor (via ContentResolver) for reading ROM
-    jclass contextClass = env->GetObjectClass(context);
-    jmethodID getContentResolver = env->GetMethodID(contextClass, "getContentResolver", "()Landroid/content/ContentResolver;");
-    jobject resolver = env->CallObjectMethod(context, getContentResolver);
+static std::filesystem::path safUriToPath(JNIEnv* env, jobject activity, const char* uriStr) {
+    // Get the internal storage path
+    std::filesystem::path internalDir(SDL_AndroidGetInternalStoragePath());
+    std::filesystem::path romPath = internalDir / "Starfox64.z64";
+    
+    // Get ContentResolver from the activity
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID getContentResolver = env->GetMethodID(activityClass, "getContentResolver", "()Landroid/content/ContentResolver;");
+    if (!getContentResolver) {
+        LOGE("Failed to get getContentResolver method");
+        return "";
+    }
+    jobject resolver = env->CallObjectMethod(activity, getContentResolver);
+    if (!resolver) {
+        LOGE("Failed to get ContentResolver");
+        return "";
+    }
 
-    jclass resolverClass = env->GetObjectClass(resolver);
-    jmethodID openFileDescriptor = env->GetMethodID(resolverClass, "openFileDescriptor",
-                                                    "(Landroid/net/Uri;Ljava/lang/String;)Landroid/os/ParcelFileDescriptor;");
+    // Parse the URI string
     jclass uriClass = env->FindClass("android/net/Uri");
     jmethodID parseUri = env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
     jstring jUriStr = env->NewStringUTF(uriStr);
     jobject uri = env->CallStaticObjectMethod(uriClass, parseUri, jUriStr);
+    env->DeleteLocalRef(jUriStr);
 
+    // Open file descriptor
+    jclass resolverClass = env->GetObjectClass(resolver);
+    jmethodID openFileDescriptor = env->GetMethodID(resolverClass, "openFileDescriptor",
+                                                    "(Landroid/net/Uri;Ljava/lang/String;)Landroid/os/ParcelFileDescriptor;");
     jstring mode = env->NewStringUTF("r");
     jobject pfd = env->CallObjectMethod(resolver, openFileDescriptor, uri, mode);
+    env->DeleteLocalRef(mode);
+
+    if (!pfd) {
+        LOGE("Failed to open ParcelFileDescriptor");
+        return "";
+    }
 
     // Extract file descriptor
     jclass pfdClass = env->GetObjectClass(pfd);
     jmethodID getFd = env->GetMethodID(pfdClass, "getFd", "()I");
     jint fd = env->CallIntMethod(pfd, getFd);
 
-    // Build a temporary path and copy the file contents
-    std::filesystem::path internalDir(SDL_AndroidGetInternalStoragePath());
-    std::filesystem::path romPath = internalDir / "Starfox64.z64";
+    // Copy file contents via file descriptor
+    FILE* srcFile = fdopen(dup(fd), "rb");  // Use dup() to avoid closing the original fd
+    if (!srcFile) {
+        LOGE("Failed to fdopen file descriptor");
+        return "";
+    }
 
-    FILE* srcFile = fdopen(fd, "rb");
     std::ofstream outFile(romPath, std::ios::binary);
-    if (!srcFile || !outFile) return "";
+    if (!outFile) {
+        fclose(srcFile);
+        LOGE("Failed to open output file: %s", romPath.string().c_str());
+        return "";
+    }
 
     char buf[4096];
     size_t bytesRead = 0;
     while ((bytesRead = fread(buf, 1, sizeof(buf), srcFile)) > 0) {
         outFile.write(buf, bytesRead);
     }
+    
     fclose(srcFile);
+    outFile.close();
+
+    // Close the ParcelFileDescriptor
+    jmethodID closePfd = env->GetMethodID(pfdClass, "close", "()V");
+    env->CallVoidMethod(pfd, closePfd);
+
+    LOGI("ROM copied successfully to: %s", romPath.string().c_str());
     return romPath;
 }
 
 // JNI bridge to request ROM from Java
+// IMPORTANT: Function name must match package: com.canc.starfox64.MainActivity
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_canc_code_starfox_MainActivity_pickRom(JNIEnv* env, jobject thiz, jstring uri) {
+Java_com_canc_starfox64_MainActivity_pickRom(JNIEnv* env, jobject thiz, jstring uri) {
     const char* uriStr = env->GetStringUTFChars(uri, nullptr);
     std::filesystem::path romPath = safUriToPath(env, thiz, uriStr);
     env->ReleaseStringUTFChars(uri, uriStr);
-    LOGI("ROM copied via SAF to: %s", romPath.string().c_str());
+    
+    if (romPath.empty()) {
+        LOGE("Failed to copy ROM via SAF");
+    } else {
+        LOGI("ROM copied via SAF to: %s", romPath.string().c_str());
+    }
 }
 
 // -------------------------------
