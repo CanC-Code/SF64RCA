@@ -20,8 +20,8 @@ android {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
         }
 
-        // FIX: match your installed NDK version
-        ndkVersion "27.3.13750724"
+        // Lock to a stable NDK
+        ndkVersion = "25.2.9519653"
     }
 
     buildTypes {
@@ -57,7 +57,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("CMakeLists.txt")
-            version = "3.22.1"
+            version = "3.22.1"  // Locked to a stable version
         }
     }
 }
@@ -65,7 +65,7 @@ android {
 // -------------------------------
 // Dynamic assets preprocessing
 // -------------------------------
-def fileToCExecutable = "../file_to_c" // Path to your file_to_c binary
+def fileToCExecutable = "../file_to_c"
 def dynamicDirs = ["cshaders", "cmods", "cpatches"]
 
 dynamicDirs.each { dirName ->
