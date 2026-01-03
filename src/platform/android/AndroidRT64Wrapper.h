@@ -1,33 +1,68 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
-#include <memory>
 
-// Forward declare RT64 types to avoid including heavy headers in all files
-struct RT64RenderContext;
-struct RT64FrameSettings;
+struct SDL_Window;
 
+namespace RT64 {
+    struct RenderDevice;
+    struct RenderContext;
+}
+
+namespace SF64RCA {
+
+/**
+ * AndroidRT64Wrapper
+ *
+ * This class owns the RT64 renderer lifecycle on Android.
+ * It isolates RT64 from the rest of the engine so the submodule
+ * remains untouched.
+ */
 class AndroidRT64Wrapper {
 public:
     AndroidRT64Wrapper();
     ~AndroidRT64Wrapper();
 
-    // Initialize RT64 with platform-specific context
-    bool initialize(void* windowHandle, int width, int height);
+    // Non-copyable
+    AndroidRT64Wrapper(const AndroidRT64Wrapper&) = delete;
+    AndroidRT64Wrapper& operator=(const AndroidRT64Wrapper&) = delete;
 
-    // Shutdown and cleanup
-    void shutdown();
+    /**
+     * Initialize RT64 with an existing SDL window.
+     * Returns false on failure.
+     */
+    bool initialize(SDL_Window* window, int width, int height);
 
-    // Render a single frame using current game data
-    void renderFrame(const uint8_t* frameBuffer, int width, int height);
-
-    // Resize viewport if window changes
+    /**
+     * Resize the rendering surface.
+     */
     void resize(int width, int height);
 
-    // Access underlying RT64 context if needed
-    RT64RenderContext* getContext();
+    /**
+     * Render a single frame.
+     */
+    void renderFrame();
+
+    /**
+     * Shut down RT64 cleanly.
+     */
+    void shutdown();
+
+    /**
+     * Whether RT64 is fully initialized.
+     */
+    bool isInitialized() const;
 
 private:
-    RT64RenderContext* context;
+    bool initialized = false;
+
+    SDL_Window* sdlWindow = nullptr;
+
+    RT64::RenderDevice* renderDevice = nullptr;
+    RT64::RenderContext* renderContext = nullptr;
+
+    int surfaceWidth = 0;
+    int surfaceHeight = 0;
 };
+
+} // namespace SF64RCA
