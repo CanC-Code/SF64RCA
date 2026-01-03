@@ -127,7 +127,6 @@ file(GLOB GENERATED_SOURCES
 
 add_library(starfox64recompiled SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/cpp/SDL_main.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/cpp/main_android_wrapper.cpp
     ${GAME_SOURCES}
     ${DYNAMIC_SHADER_SOURCES}
     ${DYNAMIC_MOD_SOURCES}
