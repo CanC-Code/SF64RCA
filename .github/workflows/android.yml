@@ -101,19 +101,23 @@ jobs:
     - name: Generate shader headers dynamically
       run: |
         mkdir -p android/app/src/main/cshaders
-        for f in shaders/*.hlsl 2>/dev/null; do
+        shopt -s nullglob
+        for f in shaders/*.hlsl; do
           base=$(basename "$f" .hlsl)
           file_to_c "$f" "shader_${base}" "android/app/src/main/cshaders/${base}.c" "android/app/src/main/cshaders/${base}.h"
         done
+        shopt -u nullglob
 
     # ---------- Dynamic Mods ----------
     - name: Generate mod headers dynamically
       run: |
         mkdir -p android/app/src/main/cmods
-        for f in mods/*.nrm 2>/dev/null; do
+        shopt -s nullglob
+        for f in mods/*.nrm; do
           base=$(basename "$f" .nrm)
           file_to_c "$f" "$base" "android/app/src/main/cmods/${base}.c" "android/app/src/main/cmods/${base}.h"
         done
+        shopt -u nullglob
 
     # ---------- Dynamic Patches ----------
     - name: Generate patches_bin.c dynamically
