@@ -52,7 +52,31 @@ jobs:
           rsync -a icons/ $ASSETS_DIR/icons/
           rsync -a shaders/ $ASSETS_DIR/shaders/
 
-          # Any additional directories needed at runtime can be added similarly
+      - name: Pre-generate host-only artifacts
+        run: |
+          set -e
+          mkdir -p generated_shaders generated_mods RecompiledPatches android/app/src/main/cmods
+
+          echo "Generating HLSL shader headers..."
+          for vs in shaders/*.hlsl; do
+              name=$(basename "$vs")
+              out="$GITHUB_WORKSPACE/generated_shaders/$name"
+              file_to_c "$vs" "shader_$(basename $vs .hlsl)" "$out" "$out.h"
+          done
+
+          echo "Converting .nrm mods to C headers..."
+          for mod in mods/*.nrm; do
+              modname=$(basename "$mod" .nrm)
+              out="$GITHUB_WORKSPACE/android/app/src/main/cmods/$modname.c"
+              file_to_c "$mod" "$modname" "$out" "$out.h"
+          done
+
+          echo "Generating patches_bin.c..."
+          if [ -f patches/patches.bin ]; then
+              file_to_c patches/patches.bin mm_patches_bin RecompiledPatches/patches_bin.c RecompiledPatches/patches_bin.h
+          else
+              echo "Warning: patches/patches.bin not found; skipping patches_bin.c"
+          fi
 
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
