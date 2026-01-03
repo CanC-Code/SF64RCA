@@ -41,7 +41,7 @@ jobs:
       with:
         api-level: 34
         build-tools: 34.0.0
-        ndk: 25.1.8937393      # <-- fixed to match android.ndkVersion
+        ndk: 25.2.9519653  # matches android.ndkVersion in build.gradle
         cmake: 3.27.3
 
     # ---------- Configure local.properties ----------
@@ -54,15 +54,14 @@ jobs:
     # ---------- Verify CMake ----------
     - name: Verify CMake
       run: |
-        echo "Using CMake from $ANDROID_HOME/cmake/3.27.3/bin"
         export PATH="$ANDROID_HOME/cmake/3.27.3/bin:$PATH"
         cmake --version
 
-    # ---------- Gradle ----------
+    # ---------- Make gradlew executable ----------
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # ---------- file_to_c ----------
+    # ---------- file_to_c Utility ----------
     - name: Build file_to_c utility
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
