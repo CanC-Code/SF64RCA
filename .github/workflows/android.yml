@@ -12,33 +12,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # --- Checkout repository ---
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: recursive
         fetch-depth: 0
 
-    # --- Initialize git submodules if not already ---
     - name: Initialize submodules
-      run: |
-        git submodule update --init --recursive
-        echo "Submodules initialized"
+      run: git submodule update --init --recursive
 
-    # --- Install minimal system dependencies ---
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake git unzip wget gcc zipalign
+        sudo apt-get install -y build-essential cmake git unzip wget gcc imagemagick
 
-    # --- Setup JDK 17 ---
     - name: Setup JDK 17
       uses: actions/setup-java@v4
       with:
-        distribution: 'temurin'
-        java-version: '17'
+        distribution: temurin
+        java-version: 17
 
-    # --- Setup Android SDK ---
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
@@ -47,370 +40,70 @@ jobs:
         ndk: 25.2.9519653
         cmake: 3.22.1
 
-    # --- Make gradlew executable ---
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # --- Build file_to_c utility ---
+    # ---------- file_to_c ----------
     - name: Build file_to_c utility
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
         #include <stdio.h>
         #include <stdlib.h>
-        #include <string.h>
-        int main(int argc, char *argv[]) {
-            if (argc != 5) { fprintf(stderr, "Usage: %s <input_file> <symbol_name> <output_c> <output_h>\n", argv[0]); return 1; }
-            const char *infile = argv[1], *sym = argv[2], *cfile = argv[3], *hfile = argv[4];
-            FILE *in=fopen(infile,"rb"); if(!in){fprintf(stderr,"Cannot open %s\n",infile);return 1;}
-            fseek(in,0,SEEK_END); long size=ftell(in); fseek(in,0,SEEK_SET);
-            FILE *h=fopen(hfile,"w"); if(!h){fclose(in);fprintf(stderr,"Cannot create %s\n",hfile);return 1;}
-            fprintf(h,"#ifndef %s_H\n#define %s_H\n\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n\n#endif\n", sym,sym,sym,sym); fclose(h);
-            FILE *c=fopen(cfile,"w"); if(!c){fclose(in);fprintf(stderr,"Cannot create %s\n",cfile);return 1;}
-            fprintf(c,"#include \"%s\"\n\nconst unsigned char %s[] = {\n", strrchr(hfile,'/')?strrchr(hfile,'/')+1:hfile, sym);
-            unsigned char b; long count=0; while(fread(&b,1,1,in)==1){if(count%16==0)fprintf(c,"    "); fprintf(c,"0x%02x",b); count++; if(count<size){fprintf(c,","); if(count%16==0)fprintf(c,"\n"); else fprintf(c," ");}}
-            fprintf(c,"\n};\n\nconst unsigned int %s_size = %ld;\n", sym,size); fclose(in); fclose(c); return 0;
+        int main(int argc,char**argv){
+          if(argc!=5)return 1;
+          FILE*i=fopen(argv[1],"rb"); if(!i)return 1;
+          FILE*c=fopen(argv[3],"w"); FILE*h=fopen(argv[4],"w");
+          fseek(i,0,SEEK_END); long s=ftell(i); fseek(i,0,SEEK_SET);
+          fprintf(h,"extern const unsigned char %s[];\nextern const unsigned int %s_size;\n",argv[2],argv[2]);
+          fprintf(c,"const unsigned char %s[]={",argv[2]);
+          for(long j=0;j<s;j++){fprintf(c,"0x%02x,",fgetc(i));}
+          fprintf(c,"};\nconst unsigned int %s_size=%ld;",argv[2],s);
         }
         EOF
-        gcc /tmp/file_to_c.c -o /tmp/file_to_c
-        sudo mv /tmp/file_to_c /usr/local/bin/file_to_c
-        sudo chmod +x /usr/local/bin/file_to_c
-        echo "file_to_c utility built successfully"
+        gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
+        chmod +x /usr/local/bin/file_to_c
 
-    # --- Prepare Android launcher icons ---
-    - name: Prepare Android launcher icons
-      run: |
-        # Install imagemagick if not already installed
-        sudo apt-get install -y imagemagick
-        
-        # Create all required mipmap directories
-        mkdir -p android/app/src/main/res/mipmap-mdpi
-        mkdir -p android/app/src/main/res/mipmap-hdpi
-        mkdir -p android/app/src/main/res/mipmap-xhdpi
-        mkdir -p android/app/src/main/res/mipmap-xxhdpi
-        mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-        
-        # Generate launcher icons at different resolutions
-        convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-        convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-        convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-        convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-        convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-        
-        echo "Launcher icons generated for all densities"
-
-    # --- Copy assets dynamically ---
-    - name: Copy assets to Android project
+    # ---------- Assets ----------
+    - name: Copy assets
       run: |
         rm -rf android/app/src/main/assets
         cp -R assets android/app/src/main/
-        echo "Assets copied successfully"
 
-    # --- Generate shader headers dynamically ---
-    - name: Generate shader headers dynamically
-      run: |
-        mkdir -p android/app/src/main/cshaders
-        if ls shaders/*.hlsl 1> /dev/null 2>&1; then
-          for f in shaders/*.hlsl; do
-              base=$(basename "$f" .hlsl)
-              file_to_c "$f" "shader_${base}" "android/app/src/main/cshaders/${base}.c" "android/app/src/main/cshaders/${base}.h"
-              echo "Generated shader header for $base"
-          done
-        else
-          echo "No HLSL shaders found"
-        fi
-
-    # --- Generate mod headers dynamically ---
-    - name: Generate mod headers dynamically
-      run: |
-        mkdir -p android/app/src/main/cmods
-        if ls mods/*.nrm 1> /dev/null 2>&1; then
-          for f in mods/*.nrm; do
-              base=$(basename "$f" .nrm)
-              file_to_c "$f" "$base" "android/app/src/main/cmods/${base}.c" "android/app/src/main/cmods/${base}.h"
-              echo "Generated mod header for $base"
-          done
-        else
-          echo "No .nrm mods found"
-        fi
-
-    # --- Generate patches_bin.c dynamically ---
-    - name: Generate patches_bin.c dynamically
-      run: |
-        mkdir -p android/app/src/main/cpatches
-        if [ -f patches/patches.bin ]; then
-          file_to_c patches/patches.bin mm_patches_bin android/app/src/main/cpatches/patches_bin.c android/app/src/main/cpatches/patches_bin.h
-          echo "Generated patches_bin header"
-        else
-          echo "patches/patches.bin not found, skipping"
-        fi
-
-    # --- Cache Gradle dependencies ---
-    - name: Cache Gradle
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-          android/.gradle
-        key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
-        restore-keys: |
-          gradle-${{ runner.os }}-
-
-    # --- Build APK ---
-    - name: Build Android APK
+    # ---------- Build ----------
+    - name: Build Android APK (FAIL FAST)
       working-directory: android
       run: |
-        echo "Building APK with native libraries..."
-        ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build.log
-        
-    # --- Verify native libraries were built ---
-    - name: Verify native libraries
-      run: |
-        echo "=========================================="
-        echo "CHECKING FOR COMPILED NATIVE LIBRARIES"
-        echo "=========================================="
-        
-        # Check build directory for .so files
-        echo "Searching for .so files in build directory..."
-        find android/app/build -name "*.so" -type f || echo "⚠️ No .so files found in build directory"
-        
-        echo ""
-        echo "Checking specific architecture directories..."
-        for arch in arm64-v8a armeabi-v7a x86_64 x86; do
-          if [ -d "android/app/build/intermediates/cmake/debug/obj/$arch" ]; then
-            echo "✅ Found $arch directory"
-            ls -lh "android/app/build/intermediates/cmake/debug/obj/$arch" || true
-          else
-            echo "⚠️ $arch directory not found"
-          fi
-        done
-        
-        echo ""
-        echo "Checking CMake build logs..."
-        if [ -f "android/build.log" ]; then
-          if grep -q "Build command: cmake" android/build.log; then
-            echo "✅ CMake was invoked during build"
-          else
-            echo "❌ CMake was NOT invoked - native build failed!"
-          fi
-          
-          if grep -q "error:" android/build.log; then
-            echo "⚠️ Build errors detected:"
-            grep "error:" android/build.log | head -20
-          fi
-        fi
+        ./gradlew assembleDebug --no-daemon --stacktrace --info
 
-    # --- COMPREHENSIVE APK DEBUGGING ---
-    - name: Debug APK - Basic Info
+    # ---------- Resolve APK ----------
+    - name: Resolve APK path
+      id: apk
       run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "APK BASIC INFORMATION"
-        echo "=========================================="
-        
-        if [ ! -f "$APK_PATH" ]; then
-          echo "❌ APK NOT FOUND at $APK_PATH"
+        APK=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+        if [ -z "$APK" ]; then
+          echo "❌ No APK produced"
           exit 1
         fi
-        
-        echo "✅ APK exists at: $APK_PATH"
-        echo "File size: $(du -h $APK_PATH | cut -f1)"
-        echo "File permissions: $(ls -lh $APK_PATH)"
-        echo ""
-        
-        # Check if it's a valid ZIP file
-        echo "=========================================="
-        echo "ZIP STRUCTURE CHECK"
-        echo "=========================================="
-        if unzip -t "$APK_PATH" > /dev/null 2>&1; then
-          echo "✅ APK is a valid ZIP archive"
-        else
-          echo "❌ APK is NOT a valid ZIP archive - this will cause parse errors!"
-          exit 1
-        fi
-        echo ""
+        echo "apk_path=$APK" >> $GITHUB_OUTPUT
+        echo "Found APK: $APK"
 
-    - name: Debug APK - Package Info
+    # ---------- APK Verification ----------
+    - name: APK sanity check
       run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "PACKAGE INFORMATION (aapt)"
-        echo "=========================================="
-        $ANDROID_HOME/build-tools/34.0.0/aapt dump badging "$APK_PATH" || echo "❌ aapt dump badging failed"
-        echo ""
+        APK="${{ steps.apk.outputs.apk_path }}"
+        unzip -t "$APK" > /dev/null
+        $ANDROID_HOME/build-tools/34.0.0/aapt dump badging "$APK"
+        $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK"
 
-    - name: Debug APK - Manifest
-      run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "ANDROID MANIFEST"
-        echo "=========================================="
-        $ANDROID_HOME/build-tools/34.0.0/aapt dump xmltree "$APK_PATH" AndroidManifest.xml | head -100 || echo "❌ Failed to dump manifest"
-        echo ""
-
-    - name: Debug APK - Contents List
-      run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "APK CONTENTS (first 50 files)"
-        echo "=========================================="
-        unzip -l "$APK_PATH" | head -50
-        echo ""
-        
-        echo "=========================================="
-        echo "NATIVE LIBRARIES"
-        echo "=========================================="
-        unzip -l "$APK_PATH" | grep "lib/" || echo "No native libraries found"
-        echo ""
-
-    - name: Debug APK - Signing Info
-      run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "APK SIGNATURE VERIFICATION"
-        echo "=========================================="
-        if $ANDROID_HOME/build-tools/34.0.0/apksigner verify -v "$APK_PATH" 2>&1; then
-          echo "✅ APK signature is VALID"
-        else
-          echo "⚠️ APK signature verification failed (may be OK for debug builds)"
-        fi
-        echo ""
-        
-        echo "=========================================="
-        echo "DETAILED SIGNATURE INFO"
-        echo "=========================================="
-        $ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs "$APK_PATH" 2>&1 || echo "Could not get signature details"
-        echo ""
-
-    - name: Debug APK - Alignment Check
-      run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "APK ALIGNMENT CHECK"
-        echo "=========================================="
-        if $ANDROID_HOME/build-tools/34.0.0/zipalign -c -v 4 "$APK_PATH" 2>&1; then
-          echo "✅ APK is properly aligned"
-        else
-          echo "⚠️ APK is not aligned (may cause installation issues on some devices)"
-        fi
-        echo ""
-
-    - name: Debug APK - Minimum Requirements
-      run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "MINIMUM ANDROID REQUIREMENTS"
-        echo "=========================================="
-        $ANDROID_HOME/build-tools/34.0.0/aapt dump badging "$APK_PATH" | grep -E "sdkVersion|targetSdkVersion|native-code"
-        echo ""
-        
-        echo "=========================================="
-        echo "PERMISSIONS"
-        echo "=========================================="
-        $ANDROID_HOME/build-tools/34.0.0/aapt dump permissions "$APK_PATH" || echo "Could not dump permissions"
-        echo ""
-
-    - name: Debug APK - Extract and Verify AndroidManifest.xml
-      run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "EXTRACTING ANDROIDMANIFEST.XML"
-        echo "=========================================="
-        
-        # Create temp directory
-        mkdir -p /tmp/apk-debug
-        
-        # Extract manifest
-        unzip -q "$APK_PATH" -d /tmp/apk-debug AndroidManifest.xml
-        
-        if [ -f /tmp/apk-debug/AndroidManifest.xml ]; then
-          echo "✅ AndroidManifest.xml found in APK"
-          echo "Size: $(du -h /tmp/apk-debug/AndroidManifest.xml | cut -f1)"
-          
-          # Try to decode it
-          echo ""
-          echo "Decoded Manifest (via aapt):"
-          $ANDROID_HOME/build-tools/34.0.0/aapt dump xmltree "$APK_PATH" AndroidManifest.xml | head -200
-        else
-          echo "❌ AndroidManifest.xml NOT FOUND in APK - this will cause parse errors!"
-          exit 1
-        fi
-
-    - name: Debug APK - Check for Common Issues
-      run: |
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        
-        echo "=========================================="
-        echo "CHECKING FOR COMMON ISSUES"
-        echo "=========================================="
-        
-        # Check for resources.arsc
-        if unzip -l "$APK_PATH" | grep -q "resources.arsc"; then
-          echo "✅ resources.arsc present"
-        else
-          echo "⚠️ resources.arsc missing - may cause issues"
-        fi
-        
-        # Check for classes.dex
-        if unzip -l "$APK_PATH" | grep -q "classes.dex"; then
-          echo "✅ classes.dex present"
-        else
-          echo "❌ classes.dex MISSING - APK will not run!"
-        fi
-        
-        # Check for META-INF
-        if unzip -l "$APK_PATH" | grep -q "META-INF/"; then
-          echo "✅ META-INF directory present"
-        else
-          echo "⚠️ META-INF directory missing"
-        fi
-        
-        echo ""
-        echo "=========================================="
-        echo "APK DEBUGGING COMPLETE"
-        echo "=========================================="
-
-    # --- Upload APK artifact ---
-    - name: Upload APK artifact
+    # ---------- Upload ----------
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: SF64RCA-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        path: ${{ steps.apk.outputs.apk_path }}
         if-no-files-found: error
-        
-    # --- Upload debug logs ---
-    - name: Upload build logs
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs
-        path: |
-          android/app/build/outputs/logs/
-          android/build/reports/
-        if-no-files-found: ignore
 
-    # --- Create build summary ---
-    - name: Create build summary
-      if: success()
+    - name: Build summary
       run: |
-        echo "## 🎮 Build Successful! 🚀" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### APK Details" >> $GITHUB_STEP_SUMMARY
-        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
-        APK_SIZE=$(du -h $APK_PATH | cut -f1)
-        echo "- **Size:** $APK_SIZE" >> $GITHUB_STEP_SUMMARY
-        echo "- **Location:** \`$APK_PATH\`" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📋 Debug Info" >> $GITHUB_STEP_SUMMARY
-        echo "Check the job output above for detailed APK debugging information." >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📦 Download" >> $GITHUB_STEP_SUMMARY
-        echo "The APK is available in the workflow artifacts section above." >> $GITHUB_STEP_SUMMARY
+        echo "## ✅ APK Built Successfully" >> $GITHUB_STEP_SUMMARY
+        echo "**APK:** ${{ steps.apk.outputs.apk_path }}" >> $GITHUB_STEP_SUMMARY
