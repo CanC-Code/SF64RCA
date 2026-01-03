@@ -48,10 +48,36 @@ if(NOT TARGET SDL2::SDL2)
 endif()
 
 # -------------------------------
+# Disable NativeFileDialog for Android
+# -------------------------------
+set(BUILD_NFD OFF CACHE BOOL "" FORCE)
+set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
+
+# -------------------------------
+# External libraries
+# -------------------------------
+# Add rt64 AFTER BUILD_NFD OFF is set
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
+set(BUILD_SHARED_LIBS OFF)
+
+# Lunasvg
+set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/lunasvg)
+
+# RmlUi
+set(RMLUI_SVG_PLUGIN ON CACHE BOOL "" FORCE)
+set(RMLUI_TESTS_ENABLED OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi)
+target_compile_definitions(rmlui_core PRIVATE LUNASVG_BUILD_STATIC)
+
+# N64ModernRuntime
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime)
+
+# -------------------------------
 # RecompiledFuncs Library
 # -------------------------------
-file(GLOB FUNC_C_SOURCES ${CMAKE_SOURCE_DIR}/../RecompiledFuncs/*.c)
-file(GLOB FUNC_CXX_SOURCES ${CMAKE_SOURCE_DIR}/../RecompiledFuncs/*.cpp)
+file(GLOB FUNC_C_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledFuncs/*.c)
+file(GLOB FUNC_CXX_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledFuncs/*.cpp)
 
 add_library(RecompiledFuncs STATIC ${FUNC_C_SOURCES} ${FUNC_CXX_SOURCES})
 target_compile_options(RecompiledFuncs PRIVATE
@@ -60,17 +86,17 @@ target_compile_options(RecompiledFuncs PRIVATE
     -Wno-implicit-function-declaration
 )
 target_include_directories(RecompiledFuncs PRIVATE
-    ${CMAKE_SOURCE_DIR}/../include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/ultramodern/include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/librecomp/include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/N64Recomp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/ultramodern/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/librecomp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/N64Recomp/include
 )
 
 # -------------------------------
 # PatchesLib Library
 # -------------------------------
 add_library(PatchesLib STATIC
-    ${CMAKE_SOURCE_DIR}/../RecompiledPatches/patches.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches.c
 )
 target_compile_options(PatchesLib PRIVATE
     -fno-strict-aliasing
@@ -78,54 +104,31 @@ target_compile_options(PatchesLib PRIVATE
     -Wno-implicit-function-declaration
 )
 target_include_directories(PatchesLib PRIVATE
-    ${CMAKE_SOURCE_DIR}/../include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/ultramodern/include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/librecomp/include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/N64Recomp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/ultramodern/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/librecomp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/N64Recomp/include
 )
-
-# -------------------------------
-# External libraries
-# -------------------------------
-# Disable native file dialog for Android (requires GTK which doesn't exist on Android)
-set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
-set(BUILD_NFD OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
-set(BUILD_SHARED_LIBS OFF)
-
-# Lunasvg
-set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/lunasvg)
-
-# RmlUi
-set(RMLUI_SVG_PLUGIN ON CACHE BOOL "" FORCE)
-set(RMLUI_TESTS_ENABLED OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/RmlUi)
-target_compile_definitions(rmlui_core PRIVATE LUNASVG_BUILD_STATIC)
-
-# N64ModernRuntime
-add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime)
 
 # -------------------------------
 # Main game sources
 # -------------------------------
 file(GLOB_RECURSE GAME_SOURCES
-    ${CMAKE_SOURCE_DIR}/../src/main/*.cpp
-    ${CMAKE_SOURCE_DIR}/../src/game/*.cpp
-    ${CMAKE_SOURCE_DIR}/../src/ui/*.cpp
-    ${CMAKE_SOURCE_DIR}/../rsp/*.cpp
-    ${CMAKE_SOURCE_DIR}/../lib/RmlUi/Backends/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/main/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/game/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/ui/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../rsp/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Backends/*.cpp
 )
 
 # -------------------------------
 # Automatically include Gradle-generated C files
 # -------------------------------
 set(GENERATED_SOURCES "")
-
 set(GENERATED_DIRS
-    "${CMAKE_SOURCE_DIR}/../app/build/generated/cshaders"
-    "${CMAKE_SOURCE_DIR}/../app/build/generated/cmods"
-    "${CMAKE_SOURCE_DIR}/../app/build/generated/cpatches"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../build/generated/cshaders"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../build/generated/cmods"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../build/generated/cpatches"
 )
 
 foreach(dir ${GENERATED_DIRS})
@@ -148,25 +151,25 @@ add_library(starfox64recompiled SHARED
 # Include directories
 # -------------------------------
 target_include_directories(starfox64recompiled PRIVATE
-    ${CMAKE_SOURCE_DIR}/../include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/N64Recomp/include
-    ${CMAKE_SOURCE_DIR}/../lib/concurrentqueue
-    ${CMAKE_SOURCE_DIR}/../lib/GamepadMotionHelpers
-    ${CMAKE_SOURCE_DIR}/../lib/RmlUi/Include
-    ${CMAKE_SOURCE_DIR}/../lib/RmlUi/Backends
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src/contrib
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src/contrib/hlslpp/include
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src/contrib/dxc/inc
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src/rhi
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src/render
-    ${CMAKE_SOURCE_DIR}/../lib/freetype-windows-binaries/include
-    ${CMAKE_SOURCE_DIR}/../lib/SlotMap
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/N64Recomp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/concurrentqueue
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/GamepadMotionHelpers
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Backends
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/hlslpp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/dxc/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/rhi
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/render
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/freetype-windows-binaries/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/SlotMap
     ${CMAKE_BINARY_DIR}/shaders
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cshaders
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cmods
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cpatches
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cpatches
 )
 
 # -------------------------------
@@ -202,9 +205,3 @@ target_link_libraries(starfox64recompiled
 set_target_properties(starfox64recompiled PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 )
-
-# -------------------------------
-# Notes
-# -------------------------------
-# ROM-dependent preprocessing steps are deferred to runtime via SAF.
-# On first launch, the app will prompt the user to supply the Starfox64 ROM.
