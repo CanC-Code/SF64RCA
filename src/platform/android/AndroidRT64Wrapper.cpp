@@ -1,12 +1,10 @@
 #include "AndroidRT64Wrapper.h"
 
 #include <SDL.h>
-#include <SDL_vulkan.h>
-
-#include <rt64_render_device.h>
-#include <rt64_render_context.h>
-
 #include <android/log.h>
+#include "rt64_render_hooks.h"
+#include "ultramodern/ultramodern.hpp"
+#include "zelda_render.h"
 
 #define LOG_TAG "AndroidRT64Wrapper"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -21,10 +19,7 @@ AndroidRT64Wrapper::~AndroidRT64Wrapper() {
 }
 
 bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
-    if (initialized) {
-        return true;
-    }
-
+    if (initialized) return true;
     if (!window) {
         LOGE("SDL_Window is null");
         return false;
@@ -34,83 +29,58 @@ bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
     surfaceWidth = width;
     surfaceHeight = height;
 
-    // Create RT64 render device (Vulkan via SDL)
-    RT64::RenderDevice::CreateInfo deviceInfo{};
-    deviceInfo.sdlWindow = sdlWindow;
+    // Forward SDL window to RT64Context
+    // The WindowHandle for Android is just the SDL_Window pointer
+    ultramodern::renderer::WindowHandle window_handle{};
+    window_handle.window = window;
 
-    renderDevice = RT64::RenderDevice::Create(deviceInfo);
-    if (!renderDevice) {
-        LOGE("Failed to create RT64 RenderDevice");
-        return false;
-    }
+    // Allocate RDRAM buffer (64MB for N64)
+    static uint8_t rdram[0x4000000]; 
 
-    // Create render context
-    RT64::RenderContext::CreateInfo contextInfo{};
-    contextInfo.device = renderDevice;
-    contextInfo.width = surfaceWidth;
-    contextInfo.height = surfaceHeight;
+    renderContext = zelda64::renderer::create_render_context(rdram, window_handle, true);
 
-    renderContext = RT64::RenderContext::Create(contextInfo);
     if (!renderContext) {
-        LOGE("Failed to create RT64 RenderContext");
-        renderDevice->Destroy();
-        renderDevice = nullptr;
+        LOGE("Failed to create RT64Context");
         return false;
     }
 
     initialized = true;
-    LOGI("RT64 initialized (%dx%d)", width, height);
+    LOGI("RT64Context initialized (%dx%d)", width, height);
     return true;
 }
 
 void AndroidRT64Wrapper::resize(int width, int height) {
-    if (!initialized || !renderContext) {
-        return;
-    }
-
-    if (width == surfaceWidth && height == surfaceHeight) {
-        return;
-    }
+    if (!initialized || !renderContext) return;
+    if (width == surfaceWidth && height == surfaceHeight) return;
 
     surfaceWidth = width;
     surfaceHeight = height;
 
-    renderContext->Resize(width, height);
+    // TODO: RT64Context should expose a resize if swap chain needs adjustment
+    // For now, just re-initialize user config
+    auto& config = ultramodern::renderer::get_graphics_config();
+    renderContext->update_config(config, config);
 }
 
 void AndroidRT64Wrapper::renderFrame() {
-    if (!initialized || !renderContext) {
-        return;
-    }
+    if (!initialized || !renderContext) return;
 
-    renderContext->BeginFrame();
-
-    // NOTE:
-    // Actual draw submission will come from the SF64RCA renderer
-    // via RT64 command lists. This is intentionally empty for now.
-
-    renderContext->EndFrame();
+    renderContext->check_texture_pack_actions();
+    renderContext->update_screen();
 }
 
 void AndroidRT64Wrapper::shutdown() {
-    if (!initialized) {
-        return;
-    }
+    if (!initialized) return;
 
     if (renderContext) {
-        renderContext->Destroy();
-        renderContext = nullptr;
-    }
-
-    if (renderDevice) {
-        renderDevice->Destroy();
-        renderDevice = nullptr;
+        renderContext->shutdown();
+        renderContext.reset();
     }
 
     sdlWindow = nullptr;
     initialized = false;
 
-    LOGI("RT64 shutdown complete");
+    LOGI("RT64Context shutdown complete");
 }
 
 bool AndroidRT64Wrapper::isInitialized() const {
