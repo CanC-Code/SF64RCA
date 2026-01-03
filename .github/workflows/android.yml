@@ -95,7 +95,14 @@ jobs:
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
 
-    # ---------- Setup CMakeLists.txt ----------
+    # ---------- Clean CMake cache ----------
+    - name: Clean CMake cache
+      run: |
+        echo "Removing previous CMake cache and builds..."
+        find android/app -name CMakeCache.txt -delete || true
+        rm -rf android/app/.externalNativeBuild || true
+
+    # ---------- Setup Android build structure ----------
     - name: Setup Android build structure
       run: |
         # Verify CMakeLists.txt location
@@ -111,25 +118,22 @@ jobs:
         fi
         
         # Create symlinks to lib directories that CMake needs
-        # The Android CMakeLists.txt uses paths like ../lib/rt64
-        # So from android/app/, ../lib should point to the root lib/
         if [ ! -L android/lib ]; then
           echo "Creating symlink: android/lib -> ../lib"
           ln -s ../lib android/lib
         fi
-        
-        # Verify the lib directories are accessible
+
         echo "Verifying library access from android/app/:"
         ls -la android/lib/ || echo "WARNING: android/lib symlink may not be working"
-        
-        # Also create symlinks for other directories that might be needed
+
+        # Symlinks for other directories
         for dir in include RecompiledFuncs RecompiledPatches patches rsp src; do
           if [ -d "$dir" ] && [ ! -L "android/$dir" ]; then
             echo "Creating symlink: android/$dir -> ../$dir"
             ln -s ../$dir android/$dir
           fi
         done
-        
+
         echo "Build structure setup complete"
 
     # ---------- file_to_c utility ----------
