@@ -24,7 +24,7 @@ add_compile_definitions(
 # -------------------------------
 set(CMAKE_ANDROID_STL_TYPE c++_shared)
 if(NOT DEFINED CMAKE_ANDROID_ARCH_ABI)
-    set(CMAKE_ANDROID_ARCH_ABI arm64-v8a) # Default to 64-bit ARM
+    set(CMAKE_ANDROID_ARCH_ABI arm64-v8a)
 endif()
 
 # -------------------------------
@@ -35,7 +35,7 @@ find_library(android-lib android)
 find_library(z-lib z)
 
 # -------------------------------
-# Fetch SDL2 if not already available
+# Fetch SDL2 if not available
 # -------------------------------
 if(NOT TARGET SDL2::SDL2)
     include(FetchContent)
@@ -118,7 +118,6 @@ file(GLOB_RECURSE GAME_SOURCES
 # -------------------------------
 set(GENERATED_SOURCES "")
 
-# Gradle generates files into build/generated/<dir>
 set(GENERATED_DIRS
     "${CMAKE_SOURCE_DIR}/../app/build/generated/cshaders"
     "${CMAKE_SOURCE_DIR}/../app/build/generated/cmods"
@@ -205,5 +204,5 @@ set_target_properties(starfox64recompiled PROPERTIES
 # -------------------------------
 # Notes
 # -------------------------------
-# ROM-dependent preprocessing steps are deferred to runtime.
-# On first launch, the app should prompt the user to supply the Starfox64 ROM.
+# ROM-dependent preprocessing steps are deferred to runtime via SAF.
+# On first launch, the app will prompt the user to supply the Starfox64 ROM.
