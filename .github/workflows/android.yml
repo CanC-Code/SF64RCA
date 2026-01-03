@@ -80,6 +80,20 @@ jobs:
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
 
+    # ---------- Setup CMakeLists.txt ----------
+    - name: Verify CMakeLists.txt location
+      run: |
+        if [ -f android/app/CMakeLists.txt ]; then
+          echo "CMakeLists.txt already in android/app/"
+        elif [ -f android/CMakeLists.txt ]; then
+          echo "Copying CMakeLists.txt from android/ to android/app/"
+          cp android/CMakeLists.txt android/app/
+        else
+          echo "Error: CMakeLists.txt not found in android/ directory"
+          ls -la android/
+          exit 1
+        fi
+
     # ---------- file_to_c utility ----------
     - name: Build file_to_c
       run: |
