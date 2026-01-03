@@ -45,8 +45,8 @@ jobs:
     - name: Setup Android SDK, NDK, CMake
       uses: android-actions/setup-android@v3
       with:
-        cmdline-tools-version: "9.0.5"
         accept-android-sdk-licenses: true
+        log-accepted-android-sdk-licenses: true
         packages: |
           platform-tools
           platforms;android-34
@@ -57,6 +57,7 @@ jobs:
     # ---------- Configure local.properties ----------
     - name: Configure local.properties
       run: |
+        mkdir -p android
         echo "sdk.dir=$ANDROID_HOME" > android/local.properties
         echo "ndk.dir=$ANDROID_NDK_HOME" >> android/local.properties
         echo "cmake.dir=$ANDROID_HOME/cmake/3.27.3" >> android/local.properties
@@ -65,9 +66,14 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # ---------- Ensure libs directory exists ----------
-    - name: Ensure android/app/libs exists
-      run: mkdir -p android/app/libs
+    # ---------- Ensure required directories ----------
+    - name: Create required directories
+      run: |
+        mkdir -p android/app/libs
+        mkdir -p android/app/src/main/assets
+        mkdir -p android/app/src/main/cshaders
+        mkdir -p android/app/src/main/cmods
+        mkdir -p android/app/src/main/cpatches
 
     # ---------- file_to_c utility ----------
     - name: Build file_to_c
@@ -119,17 +125,13 @@ jobs:
         convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
         convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-    # ---------- Assets ----------
+    # ---------- Copy static assets ----------
     - name: Copy static assets
-      run: |
-        rm -rf android/app/src/main/assets
-        mkdir -p android/app/src/main
-        cp -R assets android/app/src/main/
+      run: cp -R assets/* android/app/src/main/assets/
 
-    # ---------- Shader headers ----------
+    # ---------- Generate shader headers dynamically ----------
     - name: Generate shader headers dynamically
       run: |
-        mkdir -p android/app/src/main/cshaders
         shopt -s nullglob
         for f in shaders/*.hlsl; do
           base=$(basename "$f" .hlsl)
@@ -139,10 +141,9 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Mod headers ----------
+    # ---------- Generate mod headers dynamically ----------
     - name: Generate mod headers dynamically
       run: |
-        mkdir -p android/app/src/main/cmods
         shopt -s nullglob
         for f in mods/*.nrm; do
           base=$(basename "$f" .nrm)
@@ -152,10 +153,9 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Patch binary headers ----------
+    # ---------- Generate patches_bin.c dynamically ----------
     - name: Generate patches_bin.c dynamically
       run: |
-        mkdir -p android/app/src/main/cpatches
         if [ -f patches/patches.bin ]; then
           file_to_c patches/patches.bin mm_patches_bin \
             android/app/src/main/cpatches/patches_bin.c \
