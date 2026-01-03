@@ -26,7 +26,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake git unzip wget gcc imagemagick
+        sudo apt-get install -y build-essential git unzip wget gcc imagemagick
 
     # ---------- JDK ----------
     - name: Setup JDK 17
@@ -42,7 +42,15 @@ jobs:
         api-level: 34
         build-tools: 34.0.0
         ndk: 25.2.9519653
-        cmake: 3.22.1
+        cmake: 3.27.3
+
+    # ---------- Ensure CMake binary is in PATH ----------
+    - name: Symlink CMake
+      run: |
+        CMAKE_DIR="$ANDROID_HOME/cmake/3.27.3/bin"
+        echo "Using CMake from $CMAKE_DIR"
+        sudo ln -sf "$CMAKE_DIR/cmake" /usr/local/bin/cmake
+        cmake --version
 
     # ---------- Gradle ----------
     - name: Make gradlew executable
