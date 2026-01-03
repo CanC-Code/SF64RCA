@@ -50,8 +50,10 @@ endif()
 # -------------------------------
 # Disable NativeFileDialog for Android
 # -------------------------------
+# Force internal backend and skip pkg-config/GTK
 set(BUILD_NFD OFF CACHE BOOL "" FORCE)
 set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
+add_definitions(-DNFD_USE_STANDALONE)
 
 # -------------------------------
 # External libraries
