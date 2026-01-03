@@ -40,6 +40,9 @@ jobs:
           chmod +x $GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64/cmake.sh
           $GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64/cmake.sh --skip-license --prefix=$GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64
 
+      - name: Install file_to_c (mupen64plus-utils)
+        run: sudo apt-get update && sudo apt-get install -y mupen64plus-utils
+
       - name: Populate Android assets
         run: |
           ASSETS_DIR=android/app/src/main/assets
@@ -52,7 +55,7 @@ jobs:
           rsync -a icons/ $ASSETS_DIR/icons/
           rsync -a shaders/ $ASSETS_DIR/shaders/
 
-      - name: Pre-generate host-only artifacts
+      - name: Generate shaders, mods, and patches
         run: |
           set -e
           mkdir -p generated_shaders generated_mods RecompiledPatches android/app/src/main/cmods
