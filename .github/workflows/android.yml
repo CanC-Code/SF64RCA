@@ -36,48 +36,108 @@ jobs:
         ndk: 25.2.9519653
         cmake: 3.22.1
 
-    # --- Checkout mupen64plus-utils using actions/checkout ---
-    - name: Checkout mupen64plus-utils
-      uses: actions/checkout@v4
-      with:
-        repository: mupen64plus/mupen64plus-utils
-        path: mupen64plus-utils
-        ref: master
-
-    # --- Cache file_to_c binary ---
+    # --- Create file_to_c inline ---
     - name: Cache file_to_c binary
       id: file-to-c-cache
       uses: actions/cache@v4
       with:
         path: /usr/local/bin/file_to_c
-        key: file-to-c-${{ runner.os }}-v1
+        key: file-to-c-${{ runner.os }}-v2
 
-    # --- Build file_to_c ---
-    - name: Build file_to_c from mupen64plus-utils
+    - name: Build file_to_c utility
       if: steps.file-to-c-cache.outputs.cache-hit != 'true'
       run: |
-        FILE_TO_C_BUILD=/tmp/file_to_c_build
-        mkdir -p $FILE_TO_C_BUILD
+        cat > /tmp/file_to_c.c << 'EOF'
+        #include <stdio.h>
+        #include <stdlib.h>
+        #include <string.h>
 
-        FILE_C=$GITHUB_WORKSPACE/mupen64plus-utils/file_to_c/file_to_c.c
-        if [ ! -f "$FILE_C" ]; then
-          echo "Error: file_to_c.c not found at $FILE_C"
-          echo "Contents of mupen64plus-utils:"
-          ls -la $GITHUB_WORKSPACE/mupen64plus-utils/ || true
-          exit 1
-        fi
+        int main(int argc, char *argv[]) {
+            if (argc != 5) {
+                fprintf(stderr, "Usage: %s <input_file> <symbol_name> <output_c> <output_h>\n", argv[0]);
+                return 1;
+            }
+
+            const char *input_file = argv[1];
+            const char *symbol_name = argv[2];
+            const char *output_c = argv[3];
+            const char *output_h = argv[4];
+
+            FILE *in = fopen(input_file, "rb");
+            if (!in) {
+                fprintf(stderr, "Error: Cannot open input file: %s\n", input_file);
+                return 1;
+            }
+
+            // Get file size
+            fseek(in, 0, SEEK_END);
+            long size = ftell(in);
+            fseek(in, 0, SEEK_SET);
+
+            // Write header file
+            FILE *h_out = fopen(output_h, "w");
+            if (!h_out) {
+                fprintf(stderr, "Error: Cannot create header file: %s\n", output_h);
+                fclose(in);
+                return 1;
+            }
+            fprintf(h_out, "#ifndef %s_H\n", symbol_name);
+            fprintf(h_out, "#define %s_H\n\n", symbol_name);
+            fprintf(h_out, "extern const unsigned char %s[];\n", symbol_name);
+            fprintf(h_out, "extern const unsigned int %s_size;\n\n", symbol_name);
+            fprintf(h_out, "#endif\n");
+            fclose(h_out);
+
+            // Write C file
+            FILE *c_out = fopen(output_c, "w");
+            if (!c_out) {
+                fprintf(stderr, "Error: Cannot create C file: %s\n", output_c);
+                fclose(in);
+                return 1;
+            }
+
+            fprintf(c_out, "#include \"%s\"\n\n", strrchr(output_h, '/') ? strrchr(output_h, '/') + 1 : output_h);
+            fprintf(c_out, "const unsigned char %s[] = {\n", symbol_name);
+
+            unsigned char byte;
+            long count = 0;
+            while (fread(&byte, 1, 1, in) == 1) {
+                if (count % 16 == 0) {
+                    fprintf(c_out, "    ");
+                }
+                fprintf(c_out, "0x%02x", byte);
+                count++;
+                if (count < size) {
+                    fprintf(c_out, ",");
+                    if (count % 16 == 0) {
+                        fprintf(c_out, "\n");
+                    } else {
+                        fprintf(c_out, " ");
+                    }
+                }
+            }
+            fprintf(c_out, "\n};\n\n");
+            fprintf(c_out, "const unsigned int %s_size = %ld;\n", symbol_name, size);
+
+            fclose(in);
+            fclose(c_out);
+
+            printf("Generated %s and %s for %s (%ld bytes)\n", output_c, output_h, input_file, size);
+            return 0;
+        }
+        EOF
 
         echo "Compiling file_to_c..."
-        gcc "$FILE_C" -o "$FILE_TO_C_BUILD/file_to_c"
-        sudo cp "$FILE_TO_C_BUILD/file_to_c" /usr/local/bin/
+        gcc /tmp/file_to_c.c -o /tmp/file_to_c
+        sudo cp /tmp/file_to_c /usr/local/bin/
         sudo chmod +x /usr/local/bin/file_to_c
+        echo "file_to_c compiled successfully"
 
     - name: Verify file_to_c installation
       run: |
-        echo "file_to_c location check:"
-        which file_to_c || echo "file_to_c not in PATH"
-        ls -la /usr/local/bin/file_to_c || echo "file_to_c binary not found"
-        /usr/local/bin/file_to_c --version 2>&1 || echo "file_to_c installed successfully"
+        echo "file_to_c location:"
+        which file_to_c
+        ls -la /usr/local/bin/file_to_c
 
     # --- Cache generated shader headers ---
     - name: Cache generated shader headers
