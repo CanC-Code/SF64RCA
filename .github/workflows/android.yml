@@ -1,4 +1,4 @@
-name: Android Build + Dynamic Assets
+name: Android Build + full dynamic assets
 
 on:
   push:
@@ -12,26 +12,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # --- Checkout repository ---
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: recursive
 
-    # --- Install minimal system dependencies ---
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake git unzip wget gcc
+        sudo apt-get install -y build-essential cmake git unzip wget gcc imagemagick sass
 
-    # --- Setup JDK 17 ---
     - name: Setup JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    # --- Setup Android SDK ---
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
@@ -40,80 +36,97 @@ jobs:
         ndk: 25.2.9519653
         cmake: 3.22.1
 
-    # --- Make gradlew executable ---
-    - name: Make gradlew executable
-      run: chmod +x android/gradlew
-
-    # --- Dynamically create file_to_c utility ---
-    - name: Build file_to_c utility
+    # --- file_to_c binary setup ---
+    - name: Build file_to_c
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
         #include <stdio.h>
         #include <stdlib.h>
         #include <string.h>
-        int main(int argc, char *argv[]) {
-            if (argc != 5) { fprintf(stderr, "Usage: %s <input_file> <symbol_name> <output_c> <output_h>\n", argv[0]); return 1; }
-            const char *infile = argv[1], *sym = argv[2], *cfile = argv[3], *hfile = argv[4];
-            FILE *in=fopen(infile,"rb"); if(!in){fprintf(stderr,"Cannot open %s\n",infile);return 1;}
+        int main(int argc, char *argv[]){
+            if(argc!=5){fprintf(stderr,"Usage: %s <input_file> <symbol_name> <output_c> <output_h>\n",argv[0]); return 1;}
+            const char *infile=argv[1], *sym=argv[2], *out_c=argv[3], *out_h=argv[4];
+            FILE *in=fopen(infile,"rb"); if(!in){fprintf(stderr,"Cannot open %s\n",infile); return 1;}
             fseek(in,0,SEEK_END); long size=ftell(in); fseek(in,0,SEEK_SET);
-            FILE *h=fopen(hfile,"w"); if(!h){fclose(in);fprintf(stderr,"Cannot create %s\n",hfile);return 1;}
-            fprintf(h,"#ifndef %s_H\n#define %s_H\n\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n\n#endif\n", sym,sym,sym,sym); fclose(h);
-            FILE *c=fopen(cfile,"w"); if(!c){fclose(in);fprintf(stderr,"Cannot create %s\n",cfile);return 1;}
-            fprintf(c,"#include \"%s\"\n\nconst unsigned char %s[] = {\n", strrchr(hfile,'/')?strrchr(hfile,'/')+1:hfile, sym);
-            unsigned char b; long count=0; while(fread(&b,1,1,in)==1){if(count%16==0)fprintf(c,"    "); fprintf(c,"0x%02x",b); count++; if(count<size){fprintf(c,","); if(count%16==0)fprintf(c,"\n"); else fprintf(c," ");}}
-            fprintf(c,"\n};\n\nconst unsigned int %s_size = %ld;\n", sym,size); fclose(in); fclose(c); return 0;
+            FILE *h=fopen(out_h,"w"); if(!h){fclose(in); return 1;}
+            fprintf(h,"#ifndef %s_H\n#define %s_H\n\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n\n#endif\n",sym,sym,sym,sym); fclose(h);
+            FILE *c=fopen(out_c,"w"); if(!c){fclose(in); return 1;}
+            fprintf(c,"#include \"%s\"\n\nconst unsigned char %s[] = {\n", strrchr(out_h,'/')?strrchr(out_h,'/')+1:out_h,sym);
+            unsigned char b; long count=0;
+            while(fread(&b,1,1,in)==1){if(count%16==0)fprintf(c,"    "); fprintf(c,"0x%02x",b); count++; if(count<size){fprintf(c,","); if(count%16==0)fprintf(c,"\n"); else fprintf(c," ");}}
+            fprintf(c,"\n};\nconst unsigned int %s_size=%ld;\n",sym,size); fclose(in); fclose(c); return 0;
         }
         EOF
-        gcc /tmp/file_to_c.c -o /tmp/file_to_c
-        sudo mv /tmp/file_to_c /usr/local/bin/file_to_c
+        gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
         sudo chmod +x /usr/local/bin/file_to_c
-        file_to_c --version || echo "file_to_c ready"
 
-    # --- Copy launcher icon dynamically ---
-    - name: Prepare Android launcher icon
+    # --- Generate Android launcher icons dynamically ---
+    - name: Generate Android mipmap icons
       run: |
-        RES_DIR=android/app/src/main/res/mipmap-anydpi-v26
-        mkdir -p "$RES_DIR"
-        cp icons/512.png "$RES_DIR/ic_launcher.png"
-        echo "Launcher icon prepared."
+        ICON_SRC="assets/icons/512.png"
+        RES_DIR="android/app/src/main/res"
+        mkdir -p $RES_DIR/mipmap-mdpi $RES_DIR/mipmap-hdpi $RES_DIR/mipmap-xhdpi $RES_DIR/mipmap-xxhdpi $RES_DIR/mipmap-xxxhdpi
+        convert $ICON_SRC -resize 48x48 $RES_DIR/mipmap-mdpi/ic_launcher.png
+        convert $ICON_SRC -resize 72x72 $RES_DIR/mipmap-hdpi/ic_launcher.png
+        convert $ICON_SRC -resize 96x96 $RES_DIR/mipmap-xhdpi/ic_launcher.png
+        convert $ICON_SRC -resize 144x144 $RES_DIR/mipmap-xxhdpi/ic_launcher.png
+        convert $ICON_SRC -resize 192x192 $RES_DIR/mipmap-xxxhdpi/ic_launcher.png
 
-    # --- Copy assets dynamically ---
-    - name: Copy assets to Android project
+    # --- Copy all assets dynamically ---
+    - name: Copy fonts, RML, RCSS, icons, SCSS
       run: |
-        rm -rf android/app/src/main/assets
-        cp -R assets android/app/src/main/
+        mkdir -p android/app/src/main/assets/fonts
+        mkdir -p android/app/src/main/assets/rml
+        mkdir -p android/app/src/main/assets/icons
+        mkdir -p android/app/src/main/assets/scss
 
-    # --- Generate shader headers ---
-    - name: Generate shader headers dynamically
-      run: |
-        mkdir -p android/app/src/main/cshaders
-        if ls shaders/*.hlsl 1> /dev/null 2>&1; then
-          for f in shaders/*.hlsl; do
-              base=$(basename "$f" .hlsl)
-              file_to_c "$f" "shader_${base}" "android/app/src/main/cshaders/${base}.c" "android/app/src/main/cshaders/${base}.h"
+        # Fonts
+        cp assets/*.otf android/app/src/main/assets/fonts/ 2>/dev/null || true
+        cp assets/*.ttf android/app/src/main/assets/fonts/ 2>/dev/null || true
+
+        # RML
+        cp assets/*.rml android/app/src/main/assets/rml/ 2>/dev/null || true
+        cp -r assets/config_menu android/app/src/main/assets/rml/ 2>/dev/null || true
+
+        # RCSS
+        cp assets/*.rcss android/app/src/main/assets/scss/ 2>/dev/null || true
+
+        # Icons (SVGs)
+        cp -r assets/icons/* android/app/src/main/assets/icons/ 2>/dev/null || true
+
+        # SCSS compilation
+        if [ -d assets/scss ]; then
+          mkdir -p android/app/src/main/assets/css
+          for f in assets/scss/styles/pages/*.scss; do
+            sass "$f" "android/app/src/main/assets/css/$(basename ${f%.scss}.css)"
           done
         fi
 
-    # --- Generate mod headers dynamically ---
-    - name: Generate mod headers dynamically
+    # --- Generate HLSL shader headers ---
+    - name: Generate shader headers
+      run: |
+        mkdir -p generated_shaders
+        for f in shaders/*.hlsl; do
+          name=$(basename "$f")
+          file_to_c "$f" "shader_${name%.hlsl}" "generated_shaders/$name" "generated_shaders/$name.h"
+        done
+
+    # --- Generate .nrm mods ---
+    - name: Convert .nrm mods
       run: |
         mkdir -p android/app/src/main/cmods
-        if ls mods/*.nrm 1> /dev/null 2>&1; then
-          for f in mods/*.nrm; do
-              base=$(basename "$f" .nrm)
-              file_to_c "$f" "$base" "android/app/src/main/cmods/${base}.c" "android/app/src/main/cmods/${base}.h"
-          done
-        fi
+        for f in mods/*.nrm; do
+          base=$(basename "$f" .nrm)
+          file_to_c "$f" "$base" "android/app/src/main/cmods/$base.c" "android/app/src/main/cmods/$base.h"
+        done
 
-    # --- Generate patches_bin.c dynamically ---
-    - name: Generate patches_bin.c dynamically
+    # --- Generate patches_bin.c ---
+    - name: Generate patches_bin.c
       run: |
-        mkdir -p android/app/src/main/cpatches
-        if [ -f patches/patches.bin ]; then
-          file_to_c patches/patches.bin mm_patches_bin android/app/src/main/cpatches/patches_bin.c android/app/src/main/cpatches/patches_bin.h
-        fi
+        mkdir -p RecompiledPatches
+        [ -f patches/patches.bin ] && file_to_c patches/patches.bin mm_patches_bin RecompiledPatches/patches_bin.c RecompiledPatches/patches_bin.h
 
-    # --- Cache Gradle dependencies ---
+    # --- Gradle cache ---
     - name: Cache Gradle
       uses: actions/cache@v4
       with:
@@ -121,16 +134,17 @@ jobs:
           ~/.gradle/caches
           ~/.gradle/wrapper
           android/.gradle
-        key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+        key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*','android/**/gradle-wrapper.properties') }}
         restore-keys: |
           gradle-${{ runner.os }}-
 
-    # --- Build APK ---
-    - name: Build Android APK
+    - name: Make gradlew executable
+      run: chmod +x android/gradlew
+
+    - name: Build APK
       working-directory: android
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-    # --- Upload APK artifact ---
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
