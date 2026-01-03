@@ -23,7 +23,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake git unzip wget
+        sudo apt-get install -y build-essential cmake git unzip wget zlib1g-dev
 
     - name: Setup JDK 17
       uses: actions/setup-java@v3
@@ -44,26 +44,35 @@ jobs:
       id: filetoc-cache
       uses: actions/cache@v3
       with:
-        path: /tmp/mupen64plus-core/utils/file_to_c/build/file_to_c
+        path: /tmp/file_to_c_build/file_to_c
         key: filetoc-${{ runner.os }}-v1
 
-    - name: Build file_to_c from Mupen64Plus source
+    - name: Build file_to_c
+      if: steps.filetoc-cache.outputs.cache-hit != 'true'
       run: |
-        FILE_TO_C_PATH=/tmp/mupen64plus-core/utils/file_to_c
-        if [ ! -f /usr/local/bin/file_to_c ]; then
-          if [ ! -f $FILE_TO_C_PATH/build/file_to_c ]; then
-            git clone --depth 1 https://github.com/mupen64plus/mupen64plus-core.git /tmp/mupen64plus-core
-            cd $FILE_TO_C_PATH
-            mkdir -p build && cd build
-            cmake ..
-            make
-          fi
-          sudo cp $FILE_TO_C_PATH/build/file_to_c /usr/local/bin/
-        fi
+        echo "Building file_to_c..."
+        FILE_TO_C_BUILD=/tmp/file_to_c_build
+        mkdir -p $FILE_TO_C_BUILD
+        git clone --depth 1 https://github.com/mupen64plus/mupen64plus-core.git /tmp/mupen64plus-core
+        gcc /tmp/mupen64plus-core/utils/file_to_c/file_to_c.c -o $FILE_TO_C_BUILD/file_to_c
+        sudo cp $FILE_TO_C_BUILD/file_to_c /usr/local/bin/
         echo "file_to_c version:"
         file_to_c --version
 
-    # --- Cache generated shader headers ---
+    - name: Ensure file_to_c is installed
+      if: steps.filetoc-cache.outputs.cache-hit == 'true'
+      run: |
+        echo "Using cached file_to_c"
+        file_to_c --version || echo "file_to_c installed"
+
+    - name: Cache file_to_c build
+      if: steps.filetoc-cache.outputs.cache-hit != 'true'
+      uses: actions/cache@v3
+      with:
+        path: /tmp/file_to_c_build/file_to_c
+        key: filetoc-${{ runner.os }}-v1
+
+    # --- Shader headers caching ---
     - name: Cache generated shader headers
       id: shader-cache
       uses: actions/cache@v3
@@ -81,7 +90,7 @@ jobs:
             file_to_c "$vs" "shader_$(basename $vs .hlsl)" "$out" "$out.h"
         done
 
-    # --- Cache generated mod headers ---
+    # --- Mod headers caching ---
     - name: Cache generated mod headers
       id: mod-cache
       uses: actions/cache@v3
@@ -99,7 +108,7 @@ jobs:
             file_to_c "$mod" "$modname" "$out" "$out.h"
         done
 
-    # --- Cache patches_bin.c ---
+    # --- Patches caching ---
     - name: Cache patches_bin.c
       id: patches-cache
       uses: actions/cache@v3
@@ -117,7 +126,7 @@ jobs:
             echo "Warning: patches/patches.bin not found; skipping patches_bin.c"
         fi
 
-    # --- Cache Gradle build ---
+    # --- Gradle caching ---
     - name: Cache Gradle build
       uses: actions/cache@v3
       with:
