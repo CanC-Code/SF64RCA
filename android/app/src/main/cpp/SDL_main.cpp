@@ -11,6 +11,8 @@
 #include <jni.h>
 #include <android/native_activity.h>
 
+#include "AndroidRT64Wrapper.h"
+
 #define LOG_TAG "Starfox64Recompiled"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -22,6 +24,11 @@ int GameLoop();
 bool InitializeEngine(const std::vector<uint8_t>& romData);
 extern "C" const char* SDL_AndroidGetInternalStoragePath();
 extern "C" AAssetManager* SDL_AndroidGetAssetManager();
+
+// -------------------------------
+// Global RT64 wrapper
+// -------------------------------
+static SF64RCA::AndroidRT64Wrapper* rt64Wrapper = nullptr;
 
 // -------------------------------
 // File utilities
@@ -89,11 +96,9 @@ static void show_error(const char* msg) {
 // Android SAF ROM utilities
 // -------------------------------
 static std::filesystem::path safUriToPath(JNIEnv* env, jobject activity, const char* uriStr) {
-    // Get the internal storage path
     std::filesystem::path internalDir(SDL_AndroidGetInternalStoragePath());
     std::filesystem::path romPath = internalDir / "Starfox64.z64";
     
-    // Get ContentResolver from the activity
     jclass activityClass = env->GetObjectClass(activity);
     jmethodID getContentResolver = env->GetMethodID(activityClass, "getContentResolver", "()Landroid/content/ContentResolver;");
     if (!getContentResolver) {
@@ -106,14 +111,12 @@ static std::filesystem::path safUriToPath(JNIEnv* env, jobject activity, const c
         return "";
     }
 
-    // Parse the URI string
     jclass uriClass = env->FindClass("android/net/Uri");
     jmethodID parseUri = env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
     jstring jUriStr = env->NewStringUTF(uriStr);
     jobject uri = env->CallStaticObjectMethod(uriClass, parseUri, jUriStr);
     env->DeleteLocalRef(jUriStr);
 
-    // Open file descriptor
     jclass resolverClass = env->GetObjectClass(resolver);
     jmethodID openFileDescriptor = env->GetMethodID(resolverClass, "openFileDescriptor",
                                                     "(Landroid/net/Uri;Ljava/lang/String;)Landroid/os/ParcelFileDescriptor;");
@@ -126,13 +129,11 @@ static std::filesystem::path safUriToPath(JNIEnv* env, jobject activity, const c
         return "";
     }
 
-    // Extract file descriptor
     jclass pfdClass = env->GetObjectClass(pfd);
     jmethodID getFd = env->GetMethodID(pfdClass, "getFd", "()I");
     jint fd = env->CallIntMethod(pfd, getFd);
 
-    // Copy file contents via file descriptor
-    FILE* srcFile = fdopen(dup(fd), "rb");  // Use dup() to avoid closing the original fd
+    FILE* srcFile = fdopen(dup(fd), "rb");
     if (!srcFile) {
         LOGE("Failed to fdopen file descriptor");
         return "";
@@ -150,11 +151,10 @@ static std::filesystem::path safUriToPath(JNIEnv* env, jobject activity, const c
     while ((bytesRead = fread(buf, 1, sizeof(buf), srcFile)) > 0) {
         outFile.write(buf, bytesRead);
     }
-    
+
     fclose(srcFile);
     outFile.close();
 
-    // Close the ParcelFileDescriptor
     jmethodID closePfd = env->GetMethodID(pfdClass, "close", "()V");
     env->CallVoidMethod(pfd, closePfd);
 
@@ -163,14 +163,13 @@ static std::filesystem::path safUriToPath(JNIEnv* env, jobject activity, const c
 }
 
 // JNI bridge to request ROM from Java
-// IMPORTANT: Function name must match package: com.canc.starfox64.MainActivity
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_canc_starfox64_MainActivity_pickRom(JNIEnv* env, jobject thiz, jstring uri) {
     const char* uriStr = env->GetStringUTFChars(uri, nullptr);
     std::filesystem::path romPath = safUriToPath(env, thiz, uriStr);
     env->ReleaseStringUTFChars(uri, uriStr);
-    
+
     if (romPath.empty()) {
         LOGE("Failed to copy ROM via SAF");
     } else {
@@ -200,10 +199,30 @@ int SDL_main(int argc, char* argv[]) {
     // Copy bundled assets
     AAssetManager* mgr = SDL_AndroidGetAssetManager();
     if (mgr) {
-        LOGI("Copying bundled assets to internal storage...");
+        LOGI("Copying bundled assets...");
         copy_assets_dir(mgr, "shaders", internalPath / "shaders");
         copy_assets_dir(mgr, "mods", internalPath / "mods");
         copy_assets_dir(mgr, "patches", internalPath / "patches");
+    }
+
+    // Create SDL window
+    SDL_Window* window = SDL_CreateWindow(
+        "Starfox64 Recompiled",
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        1280, 720,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
+    );
+
+    if (!window) {
+        LOGE("Failed to create SDL_Window: %s", SDL_GetError());
+        return -1;
+    }
+
+    // Initialize RT64
+    rt64Wrapper = new SF64RCA::AndroidRT64Wrapper();
+    if (!rt64Wrapper->initialize(window, 1280, 720)) {
+        LOGE("Failed to initialize RT64 wrapper");
+        return -1;
     }
 
     // ROM path
@@ -235,15 +254,60 @@ int SDL_main(int argc, char* argv[]) {
         return -1;
     }
 
-    LOGI("Starting main game loop...");
-    int ret = GameLoop();
+    // -------------------------------
+    // Main SDL loop with RT64
+    // -------------------------------
+    SDL_Event event;
+    bool running = true;
 
+    while (running) {
+        while (SDL_PollEvent(&event)) {
+            switch (event.type) {
+                case SDL_QUIT:
+                    running = false;
+                    break;
+
+                case SDL_WINDOWEVENT:
+                    if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                        int newWidth  = event.window.data1;
+                        int newHeight = event.window.data2;
+
+                        if (rt64Wrapper && rt64Wrapper->isInitialized()) {
+                            rt64Wrapper->resize(newWidth, newHeight);
+                            LOGI("RT64 resized to %dx%d", newWidth, newHeight);
+                        }
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        // Render RT64 frame
+        if (rt64Wrapper && rt64Wrapper->isInitialized()) {
+            rt64Wrapper->renderFrame();
+        }
+
+        SDL_GL_SwapWindow(window);
+    }
+
+    // -------------------------------
+    // Cleanup
+    // -------------------------------
+    if (rt64Wrapper) {
+        rt64Wrapper->shutdown();
+        delete rt64Wrapper;
+        rt64Wrapper = nullptr;
+    }
+
+    SDL_DestroyWindow(window);
     SDL_Quit();
-    return ret;
+    return 0;
 }
 
 // -------------------------------
-// InitializeEngine.cpp content
+// InitializeEngine.cpp
 // -------------------------------
 bool LoadPatchesFromROM(const std::vector<uint8_t>& romData);
 bool LoadNRMs(const std::filesystem::path& modDir);
