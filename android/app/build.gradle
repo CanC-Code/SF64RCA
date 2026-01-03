@@ -16,17 +16,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // CMake configuration for native build
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++20"
-                arguments += [
-                    "-DANDROID_PLATFORM=android-24",
-                    "-DANDROID_STL=c++_shared"
-                ]
-            }
-        }
-
         // Specify which ABIs to build for
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -41,14 +30,6 @@ android {
         debug {
             debuggable true
             jniDebuggable true
-        }
-    }
-
-    // Point to android/CMakeLists.txt (not root)
-    externalNativeBuild {
-        cmake {
-            path = file("../CMakeLists.txt")  // This points to android/CMakeLists.txt
-            version = "3.22.1"
         }
     }
 
@@ -70,8 +51,60 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    // -------------------------------
+    // External native build (CMake)
+    // -------------------------------
+    externalNativeBuild {
+        cmake {
+            path = file("CMakeLists.txt")  // points to android/CMakeLists.txt
+            version = "3.22.1"
+            cppFlags += [
+                "-std=c++20",
+                "-fno-strict-aliasing",
+                "-Wno-unused-variable",
+                "-Wno-implicit-function-declaration"
+            ]
+            arguments += [
+                "-DANDROID_PLATFORM=android-24",
+                "-DANDROID_STL=c++_shared"
+            ]
+        }
+    }
 }
 
+// -------------------------------
+// Preprocessing dynamic assets
+// -------------------------------
+def fileToCExecutable = "../file_to_c" // adjust if different path
+def dynamicDirs = [
+    "cshaders",
+    "cmods",
+    "cpatches"
+]
+
+dynamicDirs.each { dirName ->
+    def dir = file("../app/src/main/${dirName}")
+    fileTree(dir).matching { include "**/*.nrm" }.files.each { File f ->
+        def outC = file("${buildDir}/generated/${dirName}/${f.nameWithoutExtension}.c")
+        def outH = file("${buildDir}/generated/${dirName}/${f.nameWithoutExtension}.h")
+
+        tasks.register("generate${f.nameWithoutExtension.capitalize()}", Exec) {
+            inputs.file f
+            outputs.files outC, outH
+            commandLine fileToCExecutable, f.absolutePath, f.nameWithoutExtension, outC.absolutePath, outH.absolutePath
+        }
+
+        // Ensure CMake sees generated files
+        afterEvaluate {
+            android.externalNativeBuild.cmake.arguments += "-D${dirName.toUpperCase()}_GENERATED=${outC.absolutePath}"
+        }
+    }
+}
+
+// -------------------------------
+// Dependencies
+// -------------------------------
 dependencies {
     implementation 'androidx.core:core-ktx:1.13.0'
     implementation 'androidx.appcompat:appcompat:1.7.0'
