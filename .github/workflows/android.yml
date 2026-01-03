@@ -12,18 +12,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # ---------- Checkout ----------
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Initialize submodules
+      run: git submodule update --init --recursive
+
+    # ---------- System Dependencies ----------
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          git \
+          unzip \
+          wget \
+          gcc \
+          imagemagick
+
+    # ---------- JDK ----------
     - name: Setup JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: temurin
         java-version: 17
 
+    # ---------- Android SDK / NDK / CMake ----------
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
@@ -32,49 +50,154 @@ jobs:
         ndk: 27.3.13750724
         cmake: 3.27.3
 
+    # ---------- local.properties ----------
     - name: Configure local.properties
       run: |
         echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-        echo "ndk.dir=$ANDROID_HOME/ndk/27.3.13750724" >> android/local.properties
+        echo "ndk.dir=$ANDROID_NDK_HOME" >> android/local.properties
         echo "cmake.dir=$ANDROID_HOME/cmake/3.27.3" >> android/local.properties
 
-    - name: Verify toolchain
+    # ---------- Verify toolchain ----------
+    - name: Verify CMake
       run: |
-        echo "NDK:"
-        ls $ANDROID_HOME/ndk
-        echo "CMake:"
-        $ANDROID_HOME/cmake/3.27.3/bin/cmake --version
+        export PATH="$ANDROID_HOME/cmake/3.27.3/bin:$PATH"
+        cmake --version
 
+    - name: Verify NDK
+      run: |
+        ls "$ANDROID_NDK_HOME"
+
+    # ---------- Gradle permissions ----------
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
+    # ---------- file_to_c utility ----------
     - name: Build file_to_c
       run: |
-        cat > file_to_c.c << 'EOF'
+        cat > /tmp/file_to_c.c << 'EOF'
         #include <stdio.h>
         #include <stdlib.h>
         int main(int argc,char**argv){
-            if(argc!=5)return 1;
-            FILE*i=fopen(argv[1],"rb");
-            FILE*c=fopen(argv[3],"w");
-            FILE*h=fopen(argv[4],"w");
-            fseek(i,0,SEEK_END); long s=ftell(i); rewind(i);
-            fprintf(h,"extern const unsigned char %s[]; extern const unsigned int %s_size;\n",argv[2],argv[2]);
-            fprintf(c,"const unsigned char %s[]={",argv[2]);
-            for(long n=0;n<s;n++){unsigned char b; fread(&b,1,1,i); fprintf(c,"0x%02x,",b);}
-            fprintf(c,"}; const unsigned int %s_size=%ld;\n",argv[2],s);
-            fclose(i); fclose(c); fclose(h); return 0;
+            if(argc!=5){
+                fprintf(stderr,"Usage: %s <input> <symbol> <cfile> <hfile>\n",argv[0]);
+                return 1;
+            }
+            FILE *in=fopen(argv[1],"rb");
+            if(!in){perror("input");return 1;}
+            fseek(in,0,SEEK_END);
+            long size=ftell(in);
+            fseek(in,0,SEEK_SET);
+
+            FILE *h=fopen(argv[4],"w");
+            fprintf(h,"#pragma once\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n",argv[2],argv[2]);
+            fclose(h);
+
+            FILE *c=fopen(argv[3],"w");
+            fprintf(c,"#include \"%s\"\nconst unsigned char %s[] = {\n",argv[4],argv[2]);
+            for(long i=0;i<size;i++){
+                unsigned char b;
+                fread(&b,1,1,in);
+                fprintf(c,"0x%02x%s",b,(i+1<size)?",":"");
+                if((i+1)%16==0) fprintf(c,"\n");
+            }
+            fprintf(c,"\n};\nconst unsigned int %s_size = %ld;\n",argv[2],size);
+            fclose(c);
+            fclose(in);
+            return 0;
         }
         EOF
-        gcc file_to_c.c -o /usr/local/bin/file_to_c
+        gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
         chmod +x /usr/local/bin/file_to_c
 
-    - name: Build APK
-      working-directory: android
-      run: ./gradlew assembleDebug --no-daemon --stacktrace
+    # ---------- Launcher icons ----------
+    - name: Prepare launcher icons
+      run: |
+        for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+          mkdir -p android/app/src/main/res/mipmap-$d
+        done
+        convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+        convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+        convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+        convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+        convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
+    # ---------- Assets ----------
+    - name: Copy assets
+      run: |
+        rm -rf android/app/src/main/assets
+        mkdir -p android/app/src/main
+        cp -R assets android/app/src/main/
+
+    # ---------- Shader headers ----------
+    - name: Generate shader headers dynamically
+      run: |
+        mkdir -p android/app/src/main/cshaders
+        shopt -s nullglob
+        for f in shaders/*.hlsl; do
+          base=$(basename "$f" .hlsl)
+          file_to_c "$f" "shader_${base}" \
+            "android/app/src/main/cshaders/${base}.c" \
+            "android/app/src/main/cshaders/${base}.h"
+        done
+        shopt -u nullglob
+
+    # ---------- Mod headers ----------
+    - name: Generate mod headers dynamically
+      run: |
+        mkdir -p android/app/src/main/cmods
+        shopt -s nullglob
+        for f in mods/*.nrm; do
+          base=$(basename "$f" .nrm)
+          file_to_c "$f" "$base" \
+            "android/app/src/main/cmods/${base}.c" \
+            "android/app/src/main/cmods/${base}.h"
+        done
+        shopt -u nullglob
+
+    # ---------- Patch binary ----------
+    - name: Generate patches_bin.c dynamically
+      run: |
+        mkdir -p android/app/src/main/cpatches
+        if [ -f patches/patches.bin ]; then
+          file_to_c patches/patches.bin mm_patches_bin \
+            android/app/src/main/cpatches/patches_bin.c \
+            android/app/src/main/cpatches/patches_bin.h
+        fi
+
+    # ---------- Build APK ----------
+    - name: Build Android APK
+      working-directory: android
+      run: ./gradlew assembleDebug --no-daemon --stacktrace --info
+
+    # ---------- Locate APK ----------
+    - name: Resolve APK path
+      id: apk
+      run: |
+        APK=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+        if [ -z "$APK" ]; then
+          echo "No APK produced"
+          exit 1
+        fi
+        echo "apk_path=$APK" >> $GITHUB_OUTPUT
+
+    # ---------- APK verification ----------
+    - name: APK sanity check
+      run: |
+        APK="${{ steps.apk.outputs.apk_path }}"
+        unzip -t "$APK"
+        $ANDROID_HOME/build-tools/34.0.0/aapt dump badging "$APK"
+        $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK"
+
+    # ---------- Upload artifact ----------
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: SF64RCA-debug
-        path: android/app/build/outputs/apk/debug/*.apk
+        name: SF64RCA-debug-apk
+        path: ${{ steps.apk.outputs.apk_path }}
+        if-no-files-found: error
+
+    # ---------- Summary ----------
+    - name: Build summary
+      run: |
+        echo "## ✅ Android Build Complete" >> $GITHUB_STEP_SUMMARY
+        echo "**APK:** ${{ steps.apk.outputs.apk_path }}" >> $GITHUB_STEP_SUMMARY
