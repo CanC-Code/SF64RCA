@@ -19,7 +19,9 @@ android {
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
         }
-        // ndkVersion removed for CI flexibility
+
+        // Use NDK 27.3.13750724
+        ndkVersion = "27.3.13750724"
     }
 
     buildTypes {
@@ -55,7 +57,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("CMakeLists.txt")
-            version = "3.22.1"
+            version = "3.27.3"  // Match workflow
         }
     }
 }
@@ -87,6 +89,7 @@ dynamicDirs.each { dirName ->
     }
 }
 
+// Ensure native build depends on generated sources
 afterEvaluate {
     android.externalNativeBuild.cmake.tasks.each { cmakeTask ->
         cmakeTask.dependsOn(generatedTasks)
