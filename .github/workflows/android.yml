@@ -45,10 +45,12 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
-        api-level: 34
-        build-tools: 34.0.0
-        ndk: 27.3.13750724
-        cmake: 3.27.3
+        cmdline-tools-version: "9.0.3"
+        packages: |
+          platforms;android-34
+          build-tools;34.0.0
+          ndk;27.3.13750724
+          cmake;3.27.3
 
     # ---------- local.properties ----------
     - name: Configure local.properties
