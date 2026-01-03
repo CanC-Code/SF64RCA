@@ -1,20 +1,11 @@
-// Top-level build file
+// Top-level build file for Starfox64RCA
 
 buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
     dependencies {
+        // Android Gradle plugin
         classpath "com.android.tools.build:gradle:8.3.1"
+        // Kotlin plugin
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0"
-    }
-}
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
     }
 }
 
