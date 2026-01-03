@@ -16,11 +16,19 @@ add_compile_definitions(
     HLSL_CPU
     RT64_STATIC
     RT64_SDL_WINDOW_VULKAN
-    DEFER_ROM_PATCHES    # ROM-dependent code deferred to runtime
+    DEFER_ROM_PATCHES
 )
 
 # -------------------------------
-# Find system libraries
+# Android NDK settings
+# -------------------------------
+set(CMAKE_ANDROID_STL_TYPE c++_shared)
+if(NOT DEFINED CMAKE_ANDROID_ARCH_ABI)
+    set(CMAKE_ANDROID_ARCH_ABI arm64-v8a) # Default to 64-bit ARM
+endif()
+
+# -------------------------------
+# System libraries
 # -------------------------------
 find_library(log-lib log)
 find_library(android-lib android)
@@ -86,8 +94,8 @@ set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/lunasvg)
 
 # RmlUi
-SET(RMLUI_SVG_PLUGIN ON CACHE BOOL "" FORCE)
-SET(RMLUI_TESTS_ENABLED OFF CACHE BOOL "" FORCE)
+set(RMLUI_SVG_PLUGIN ON CACHE BOOL "" FORCE)
+set(RMLUI_TESTS_ENABLED OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/RmlUi)
 target_compile_definitions(rmlui_core PRIVATE LUNASVG_BUILD_STATIC)
 
@@ -95,7 +103,7 @@ target_compile_definitions(rmlui_core PRIVATE LUNASVG_BUILD_STATIC)
 add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime)
 
 # -------------------------------
-# Main executable (Android shared library)
+# Main shared library (Android)
 # -------------------------------
 file(GLOB_RECURSE GAME_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/main/*.cpp
