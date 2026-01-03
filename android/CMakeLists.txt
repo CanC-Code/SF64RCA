@@ -103,7 +103,7 @@ target_compile_definitions(rmlui_core PRIVATE LUNASVG_BUILD_STATIC)
 add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime)
 
 # -------------------------------
-# Main shared library (Android)
+# Main game sources
 # -------------------------------
 file(GLOB_RECURSE GAME_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/main/*.cpp
@@ -114,21 +114,24 @@ file(GLOB_RECURSE GAME_SOURCES
 )
 
 # -------------------------------
-# Dynamic assets from Gradle
+# Automatically include Gradle-generated C files
 # -------------------------------
 set(GENERATED_SOURCES "")
-if(DEFINED CSHADERS_GENERATED)
-    list(APPEND GENERATED_SOURCES "${CSHADERS_GENERATED}")
-endif()
-if(DEFINED CMODS_GENERATED)
-    list(APPEND GENERATED_SOURCES "${CMODS_GENERATED}")
-endif()
-if(DEFINED CPATCHES_GENERATED)
-    list(APPEND GENERATED_SOURCES "${CPATCHES_GENERATED}")
-endif()
+set(GENERATED_DIRS
+    "${CMAKE_SOURCE_DIR}/../app/build/generated/cshaders"
+    "${CMAKE_SOURCE_DIR}/../app/build/generated/cmods"
+    "${CMAKE_SOURCE_DIR}/../app/build/generated/cpatches"
+)
+
+foreach(dir ${GENERATED_DIRS})
+    if(EXISTS ${dir})
+        file(GLOB GENERATED_IN_DIR "${dir}/*.c")
+        list(APPEND GENERATED_SOURCES ${GENERATED_IN_DIR})
+    endif()
+endforeach()
 
 # -------------------------------
-# Create main shared library
+# Main shared library
 # -------------------------------
 add_library(starfox64recompiled SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/cpp/SDL_main.cpp
@@ -163,7 +166,7 @@ target_include_directories(starfox64recompiled PRIVATE
 )
 
 # -------------------------------
-# Compiler options for main library
+# Compiler options
 # -------------------------------
 target_compile_options(starfox64recompiled PRIVATE
     -fno-strict-aliasing
