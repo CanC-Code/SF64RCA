@@ -1,4 +1,4 @@
-name: Android Build + Dynamic Assets
+name: Android Build + Functional Test
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
       with:
         submodules: recursive
 
-    # --- Install minimal system dependencies ---
+    # --- Install system dependencies ---
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -44,7 +44,7 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # --- Dynamically create file_to_c utility ---
+    # --- Build file_to_c utility ---
     - name: Build file_to_c utility
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
@@ -69,7 +69,7 @@ jobs:
         sudo chmod +x /usr/local/bin/file_to_c
         file_to_c --version || echo "file_to_c ready"
 
-    # --- Copy launcher icon dynamically ---
+    # --- Prepare Android launcher icon ---
     - name: Prepare Android launcher icon
       run: |
         RES_DIR=android/app/src/main/res/mipmap-anydpi-v26
@@ -77,13 +77,13 @@ jobs:
         cp icons/512.png "$RES_DIR/ic_launcher.png"
         echo "Launcher icon prepared."
 
-    # --- Copy assets dynamically ---
+    # --- Copy assets ---
     - name: Copy assets to Android project
       run: |
         rm -rf android/app/src/main/assets
         cp -R assets android/app/src/main/
 
-    # --- Generate shader headers ---
+    # --- Generate shader headers dynamically ---
     - name: Generate shader headers dynamically
       run: |
         mkdir -p android/app/src/main/cshaders
@@ -94,7 +94,7 @@ jobs:
           done
         fi
 
-    # --- Generate mod headers ---
+    # --- Generate mod headers dynamically ---
     - name: Generate mod headers dynamically
       run: |
         mkdir -p android/app/src/main/cmods
@@ -130,27 +130,31 @@ jobs:
       working-directory: android
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-    # --- Verify APK installation readiness ---
-    - name: Verify APK
+    # --- Verify APK signature ---
+    - name: Verify APK signature
       run: |
         APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
         if [ ! -f "$APK_PATH" ]; then
           echo "APK not found! Build failed."
           exit 1
-        else
-          echo "APK found: $APK_PATH"
         fi
-
-        # Verify APK signature (ensures installable)
         echo "Verifying APK signature..."
         $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK_PATH"
 
-        if [ $? -eq 0 ]; then
-          echo "APK verification passed. APK is installable."
-        else
-          echo "APK verification failed!"
-          exit 1
-        fi
+    # --- Start Emulator & Run Basic Functional Test ---
+    - name: Test APK on Emulator
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 34
+        target: google_apis
+        arch: x86_64
+        profile: Pixel_6
+        emulator-options: -no-window -noaudio -gpu swiftshader_indirect
+        script: |
+          echo "Installing APK..."
+          adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+          echo "Launching APK for basic functional test..."
+          adb shell monkey -p com.your.package.name -c android.intent.category.LAUNCHER 1
 
     # --- Upload APK artifact ---
     - name: Upload APK artifact
