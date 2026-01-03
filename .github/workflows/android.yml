@@ -41,11 +41,11 @@ jobs:
       with:
         api-level: 34
         build-tools: 34.0.0
-        ndk: 25.2.9519653  # matches android.ndkVersion in build.gradle
+        ndk: 27.3.13750724   # Match local
         cmake: 3.27.3
 
     # ---------- Configure local.properties ----------
-    - name: Configure local.properties for Gradle
+    - name: Configure local.properties
       run: |
         echo "sdk.dir=$ANDROID_HOME" > android/local.properties
         echo "ndk.dir=$ANDROID_NDK_HOME" >> android/local.properties
@@ -61,8 +61,8 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # ---------- file_to_c Utility ----------
-    - name: Build file_to_c utility
+    # ---------- file_to_c utility ----------
+    - name: Build file_to_c
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
         #include <stdio.h>
@@ -85,8 +85,8 @@ jobs:
         gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
         chmod +x /usr/local/bin/file_to_c
 
-    # ---------- Launcher Icons ----------
-    - name: Prepare Android launcher icons
+    # ---------- Launcher icons ----------
+    - name: Prepare launcher icons
       run: |
         for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
           mkdir -p android/app/src/main/res/mipmap-$size
@@ -97,13 +97,13 @@ jobs:
         convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
         convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-    # ---------- Copy Assets ----------
+    # ---------- Copy assets ----------
     - name: Copy assets
       run: |
         rm -rf android/app/src/main/assets
         cp -R assets android/app/src/main/
 
-    # ---------- Dynamic Shaders ----------
+    # ---------- Dynamic shader headers ----------
     - name: Generate shader headers dynamically
       run: |
         mkdir -p android/app/src/main/cshaders
@@ -114,7 +114,7 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Dynamic Mods ----------
+    # ---------- Dynamic mod headers ----------
     - name: Generate mod headers dynamically
       run: |
         mkdir -p android/app/src/main/cmods
@@ -125,7 +125,7 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Dynamic Patches ----------
+    # ---------- Dynamic patches ----------
     - name: Generate patches_bin.c dynamically
       run: |
         mkdir -p android/app/src/main/cpatches
@@ -150,7 +150,7 @@ jobs:
         echo "apk_path=$APK" >> $GITHUB_OUTPUT
         echo "Found APK: $APK"
 
-    # ---------- APK Verification ----------
+    # ---------- APK verification ----------
     - name: APK sanity check
       run: |
         APK="${{ steps.apk.outputs.apk_path }}"
