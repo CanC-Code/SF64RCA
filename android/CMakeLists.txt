@@ -42,6 +42,7 @@ if(NOT TARGET SDL2::SDL2)
     FetchContent_Declare(
         SDL2
         URL https://github.com/libsdl-org/SDL/archive/refs/tags/release-2.30.3.zip
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(SDL2)
 endif()
@@ -86,6 +87,9 @@ target_include_directories(PatchesLib PRIVATE
 # -------------------------------
 # External libraries
 # -------------------------------
+# Disable native file dialog for Android (requires GTK which doesn't exist on Android)
+set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
+set(BUILD_NFD OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 set(BUILD_SHARED_LIBS OFF)
 
@@ -157,7 +161,6 @@ target_include_directories(starfox64recompiled PRIVATE
     ${CMAKE_SOURCE_DIR}/../lib/rt64/src/rhi
     ${CMAKE_SOURCE_DIR}/../lib/rt64/src/render
     ${CMAKE_SOURCE_DIR}/../lib/freetype-windows-binaries/include
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src/contrib/nativefiledialog-extended/src/include
     ${CMAKE_SOURCE_DIR}/../lib/SlotMap
     ${CMAKE_BINARY_DIR}/shaders
     ${CMAKE_CURRENT_BINARY_DIR}
@@ -186,7 +189,6 @@ target_link_libraries(starfox64recompiled
     rt64
     RmlUi::Core
     RmlUi::Debugger
-    nfd
     lunasvg
     SDL2::SDL2
     ${log-lib}
