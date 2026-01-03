@@ -19,13 +19,6 @@ android {
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
         }
-
-        externalNativeBuild {
-            cmake {
-                cppFlags "-std=c++20 -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration"
-                arguments "-DANDROID_PLATFORM=android-24", "-DANDROID_STL=c++_shared"
-            }
-        }
     }
 
     buildTypes {
@@ -60,8 +53,18 @@ android {
 
     externalNativeBuild {
         cmake {
-            path "CMakeLists.txt"
-            version "3.22.1"
+            path = file("CMakeLists.txt")
+            version = "3.22.1"
+            cppFlags += [
+                "-std=c++20",
+                "-fno-strict-aliasing",
+                "-Wno-unused-variable",
+                "-Wno-implicit-function-declaration"
+            ]
+            arguments += [
+                "-DANDROID_PLATFORM=android-24",
+                "-DANDROID_STL=c++_shared"
+            ]
         }
     }
 }
@@ -69,14 +72,12 @@ android {
 // -------------------------------
 // Preprocessing dynamic assets
 // -------------------------------
-def fileToCExecutable = "../file_to_c" // adjust path if needed
+def fileToCExecutable = "../file_to_c"
 def dynamicDirs = [
     "cshaders",
     "cmods",
     "cpatches"
 ]
-
-def generatedSourcesMap = [:]
 
 dynamicDirs.each { dirName ->
     def dir = file("../app/src/main/${dirName}")
@@ -90,23 +91,11 @@ dynamicDirs.each { dirName ->
             commandLine fileToCExecutable, f.absolutePath, f.nameWithoutExtension, outC.absolutePath, outH.absolutePath
         }
 
-        // Collect generated source paths for CMake
-        if (!generatedSourcesMap.containsKey(dirName)) {
-            generatedSourcesMap[dirName] = []
+        // Make CMake aware of generated files
+        afterEvaluate {
+            android.externalNativeBuild.cmake.arguments += "-D${dirName.toUpperCase()}_GENERATED=${outC.absolutePath}"
         }
-        generatedSourcesMap[dirName] << outC.absolutePath
     }
-}
-
-// Pass generated files to CMake via Gradle properties
-afterEvaluate {
-    def cmakeArgs = []
-    generatedSourcesMap.each { dirName, filesList ->
-        def varName = "${dirName.toUpperCase()}_GENERATED"
-        cmakeArgs += "-D${varName}=${filesList.join(';')}"
-    }
-
-    android.defaultConfig.externalNativeBuild.cmake.arguments.addAll(cmakeArgs)
 }
 
 // -------------------------------
