@@ -16,7 +16,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Specify which ABIs to build for
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
         }
@@ -57,17 +56,14 @@ android {
     // -------------------------------
     externalNativeBuild {
         cmake {
-            path = file("CMakeLists.txt")  // points to android/CMakeLists.txt
+            path = file("CMakeLists.txt")
             version = "3.22.1"
-            cppFlags += [
-                "-std=c++20",
-                "-fno-strict-aliasing",
-                "-Wno-unused-variable",
-                "-Wno-implicit-function-declaration"
-            ]
+
+            // Pass Android-specific options + CXX flags
             arguments += [
                 "-DANDROID_PLATFORM=android-24",
-                "-DANDROID_STL=c++_shared"
+                "-DANDROID_STL=c++_shared",
+                "-DCMAKE_CXX_FLAGS=-std=c++20 -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration"
             ]
         }
     }
@@ -76,7 +72,7 @@ android {
 // -------------------------------
 // Preprocessing dynamic assets
 // -------------------------------
-def fileToCExecutable = "../file_to_c" // adjust if different path
+def fileToCExecutable = "../file_to_c"
 def dynamicDirs = [
     "cshaders",
     "cmods",
@@ -95,9 +91,10 @@ dynamicDirs.each { dirName ->
             commandLine fileToCExecutable, f.absolutePath, f.nameWithoutExtension, outC.absolutePath, outH.absolutePath
         }
 
-        // Ensure CMake sees generated files
         afterEvaluate {
-            android.externalNativeBuild.cmake.arguments += "-D${dirName.toUpperCase()}_GENERATED=${outC.absolutePath}"
+            android.externalNativeBuild.cmake.arguments += [
+                "-D${dirName.toUpperCase()}_GENERATED=${outC.absolutePath}"
+            ]
         }
     }
 }
