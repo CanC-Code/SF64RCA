@@ -1,18 +1,13 @@
-name: Build Android APK
+name: Android Debug APK
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
 
     steps:
       - name: Checkout repository
@@ -24,42 +19,29 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip ninja-build
-
-      # ---- MANUAL CMAKE INSTALL (THE IMPORTANT PART) ----
-      - name: Install CMake 3.27.3
-        run: |
-          wget https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh
-          chmod +x cmake-3.27.3-linux-x86_64.sh
-          sudo ./cmake-3.27.3-linux-x86_64.sh --skip-license --prefix=/usr/local
-          cmake --version
-
-      - name: Add CMake to PATH
-        run: echo "/usr/local/bin" >> $GITHUB_PATH
-
-      # ---- ANDROID SDK / NDK ----
-      - name: Setup Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          api-level: 34
-          build-tools: 34.0.0
-          ndk: 25.1.8937393
 
-      # ---- GRADLE PERMISSIONS ----
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
 
-      # ---- BUILD (NOTE THE WORKING DIRECTORY) ----
-      - name: Assemble Debug APK
-        working-directory: android
+      - name: Install required SDK components
+        run: |
+          sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;26.2.11394342" \
+            "cmake;3.27.3"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x Android/gradlew
+
+      - name: Build debug APK
+        working-directory: Android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # ---- UPLOAD APK ----
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: Starfox64RCA-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: Android/app/build/outputs/apk/debug/*.apk
