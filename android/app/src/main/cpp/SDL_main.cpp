@@ -8,7 +8,8 @@
 #include <fstream>
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
-#include "nfd.h"
+#include <jni.h>
+#include <android/native_activity.h>
 
 #define LOG_TAG "Starfox64Recompiled"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -20,6 +21,7 @@
 int GameLoop();
 bool InitializeEngine(const std::vector<uint8_t>& romData);
 extern "C" const char* SDL_AndroidGetInternalStoragePath();
+extern "C" AAssetManager* SDL_AndroidGetAssetManager();
 
 // -------------------------------
 // File utilities
@@ -84,7 +86,59 @@ static void show_error(const char* msg) {
 }
 
 // -------------------------------
-// Android main entry
+// Android SAF ROM utilities
+// -------------------------------
+static std::filesystem::path safUriToPath(JNIEnv* env, jobject context, const char* uriStr) {
+    // Convert URI to FileDescriptor (via ContentResolver) for reading ROM
+    jclass contextClass = env->GetObjectClass(context);
+    jmethodID getContentResolver = env->GetMethodID(contextClass, "getContentResolver", "()Landroid/content/ContentResolver;");
+    jobject resolver = env->CallObjectMethod(context, getContentResolver);
+
+    jclass resolverClass = env->GetObjectClass(resolver);
+    jmethodID openFileDescriptor = env->GetMethodID(resolverClass, "openFileDescriptor",
+                                                    "(Landroid/net/Uri;Ljava/lang/String;)Landroid/os/ParcelFileDescriptor;");
+    jclass uriClass = env->FindClass("android/net/Uri");
+    jmethodID parseUri = env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    jstring jUriStr = env->NewStringUTF(uriStr);
+    jobject uri = env->CallStaticObjectMethod(uriClass, parseUri, jUriStr);
+
+    jstring mode = env->NewStringUTF("r");
+    jobject pfd = env->CallObjectMethod(resolver, openFileDescriptor, uri, mode);
+
+    // Extract file descriptor
+    jclass pfdClass = env->GetObjectClass(pfd);
+    jmethodID getFd = env->GetMethodID(pfdClass, "getFd", "()I");
+    jint fd = env->CallIntMethod(pfd, getFd);
+
+    // Build a temporary path and copy the file contents
+    std::filesystem::path internalDir(SDL_AndroidGetInternalStoragePath());
+    std::filesystem::path romPath = internalDir / "Starfox64.z64";
+
+    FILE* srcFile = fdopen(fd, "rb");
+    std::ofstream outFile(romPath, std::ios::binary);
+    if (!srcFile || !outFile) return "";
+
+    char buf[4096];
+    size_t bytesRead = 0;
+    while ((bytesRead = fread(buf, 1, sizeof(buf), srcFile)) > 0) {
+        outFile.write(buf, bytesRead);
+    }
+    fclose(srcFile);
+    return romPath;
+}
+
+// JNI bridge to request ROM from Java
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_canc_code_starfox_MainActivity_pickRom(JNIEnv* env, jobject thiz, jstring uri) {
+    const char* uriStr = env->GetStringUTFChars(uri, nullptr);
+    std::filesystem::path romPath = safUriToPath(env, thiz, uriStr);
+    env->ReleaseStringUTFChars(uri, uriStr);
+    LOGI("ROM copied via SAF to: %s", romPath.string().c_str());
+}
+
+// -------------------------------
+// SDL_main entry
 // -------------------------------
 extern "C"
 int SDL_main(int argc, char* argv[]) {
@@ -95,7 +149,6 @@ int SDL_main(int argc, char* argv[]) {
         return -1;
     }
 
-    // Internal storage
     std::string internalDir(SDL_AndroidGetInternalStoragePath());
     if (internalDir.empty()) {
         show_error("Cannot access internal storage.");
@@ -110,40 +163,15 @@ int SDL_main(int argc, char* argv[]) {
         copy_assets_dir(mgr, "shaders", internalPath / "shaders");
         copy_assets_dir(mgr, "mods", internalPath / "mods");
         copy_assets_dir(mgr, "patches", internalPath / "patches");
-    } else {
-        LOGI("Warning: AssetManager unavailable, skipping asset copy.");
     }
 
-    // Prompt user for ROM if missing
+    // ROM path
     std::filesystem::path romPath = internalPath / "Starfox64.z64";
+
+    // Wait for ROM if missing
     if (!std::filesystem::exists(romPath)) {
-        LOGI("No ROM found, prompting user...");
-
-        nfdchar_t* outPath = nullptr;
-        nfdresult_t result = NFD_OpenDialog("z64,rom", nullptr, &outPath);
-
-        if (result == NFD_OKAY) {
-            LOGI("User selected ROM: %s", outPath);
-            std::filesystem::path selected(outPath);
-
-            if (!copy_file(selected, romPath)) {
-                show_error("Failed to copy ROM to internal storage.");
-                free(outPath);
-                return -1;
-            }
-            LOGI("ROM copied to: %s", romPath.string().c_str());
-            free(outPath);
-        } else if (result == NFD_CANCEL) {
-            show_error("ROM selection cancelled. Cannot continue.");
-            return -1;
-        } else {
-            std::string err = "NFD error: ";
-            err += NFD_GetError();
-            show_error(err.c_str());
-            return -1;
-        }
-    } else {
-        LOGI("ROM already exists: %s", romPath.string().c_str());
+        show_error("No ROM found. Please select a ROM via SAF from the Android UI.");
+        return -1;
     }
 
     // Load ROM into memory
