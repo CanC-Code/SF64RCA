@@ -223,6 +223,34 @@ jobs:
             android/app/src/main/cpatches/patches_bin.h
         fi
 
+    # ---------- Patch nativefiledialog-extended for Android ----------
+    - name: Patch nativefiledialog-extended CMakeLists.txt
+      run: |
+        NFD_DIR="lib/rt64/src/contrib/nativefiledialog-extended/src"
+        CMAKE_FILE="$NFD_DIR/CMakeLists.txt"
+        
+        if [ -f "$CMAKE_FILE" ]; then
+          echo "Patching CMakeLists.txt to skip GTK detection on Android..."
+          
+          # Only insert if(NOT ANDROID) if it doesn't already exist
+          if ! grep -q "if(NOT ANDROID)" "$CMAKE_FILE"; then
+            sed -i '/pkg_check_modules(GTK3 gtk+-3.0)/i if(NOT ANDROID)' "$CMAKE_FILE"
+          else
+            echo "if(NOT ANDROID) guard already present, skipping insertion."
+          fi
+
+          # Only append endif() if the last line isn't already endif()
+          LAST_LINE=$(tail -n 1 "$CMAKE_FILE")
+          if [ "$LAST_LINE" != "endif()" ]; then
+            echo "endif()" >> "$CMAKE_FILE"
+          else
+            echo "endif() already present at the end, skipping append."
+          fi
+
+        else
+          echo "WARNING: CMakeLists.txt not found at $CMAKE_FILE"
+        fi
+
     # ---------- Build APK ----------
     - name: Build Android APK
       working-directory: android
