@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# file_to_c: Converts a single .nrm file to .c and .h for Gradle/CMake
+
+set -e
+
+if [ $# -ne 4 ]; then
+    echo "Usage: $0 <input.nrm> <basename> <output.c> <output.h>"
+    exit 1
+fi
+
+INPUT="$1"
+BASENAME="$2"
+OUT_C="$3"
+OUT_H="$4"
+
+# Skip regeneration if source hasn't changed
+if [ -f "$OUT_C" ] && [ -f "$OUT_H" ]; then
+    SRC_MOD=$(stat -c %Y "$INPUT")
+    C_MOD=$(stat -c %Y "$OUT_C")
+    H_MOD=$(stat -c %Y "$OUT_H")
+
+    if [ "$SRC_MOD" -le "$C_MOD" ] && [ "$SRC_MOD" -le "$H_MOD" ]; then
+        echo "Skipping $BASENAME (up-to-date)"
+        exit 0
+    fi
+fi
+
+echo "Generating $OUT_C and $OUT_H from $INPUT"
+
+# Convert binary data to C array
+xxd -i "$INPUT" > "$OUT_C"
+
+# Generate corresponding header
+cat > "$OUT_H" << EOF
+#pragma once
+#include <stddef.h>
+
+extern unsigned char ${BASENAME}[];
+extern size_t ${BASENAME}_len;
+EOF
+
+echo "Done generating $BASENAME"
