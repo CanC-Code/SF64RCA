@@ -41,7 +41,7 @@ jobs:
         distribution: temurin
         java-version: 17
 
-    # ---------- Setup Android SDK / NDK / CMake ----------
+    # ---------- Android SDK / NDK / CMake ----------
     - name: Setup Android SDK, NDK, CMake
       uses: android-actions/setup-android@v3
       with:
@@ -49,10 +49,10 @@ jobs:
         log-accepted-android-sdk-licenses: true
         packages: |
           platform-tools
-          "platforms;android-34"
-          "build-tools;34.0.0"
-          "ndk;27.3.13750724"
-          "cmake;3.27.3"
+          platforms;android-34
+          build-tools;34.0.0
+          ndk;27.3.13750724
+          cmake;3.27.3
 
     # ---------- Configure local.properties ----------
     - name: Configure local.properties
@@ -74,9 +74,6 @@ jobs:
         mkdir -p android/app/src/main/cshaders
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
-        for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-          mkdir -p android/app/src/main/res/mipmap-$d
-        done
 
     # ---------- file_to_c utility ----------
     - name: Build file_to_c
@@ -116,9 +113,12 @@ jobs:
         gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
         chmod +x /usr/local/bin/file_to_c
 
-    # ---------- Prepare launcher icons ----------
+    # ---------- Launcher icons ----------
     - name: Prepare launcher icons
       run: |
+        for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+          mkdir -p android/app/src/main/res/mipmap-$d
+        done
         convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
         convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
         convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -129,7 +129,7 @@ jobs:
     - name: Copy static assets
       run: cp -R assets/* android/app/src/main/assets/
 
-    # ---------- Generate shader headers ----------
+    # ---------- Generate shader headers dynamically ----------
     - name: Generate shader headers dynamically
       run: |
         shopt -s nullglob
@@ -141,7 +141,7 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Generate mod headers ----------
+    # ---------- Generate mod headers dynamically ----------
     - name: Generate mod headers dynamically
       run: |
         shopt -s nullglob
@@ -153,7 +153,7 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Generate patches_bin.c ----------
+    # ---------- Generate patches_bin.c dynamically ----------
     - name: Generate patches_bin.c dynamically
       run: |
         if [ -f patches/patches.bin ]; then
