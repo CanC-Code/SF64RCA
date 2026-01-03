@@ -45,12 +45,14 @@ jobs:
     - name: Setup Android SDK, NDK, CMake
       uses: android-actions/setup-android@v3
       with:
-        api-level: 34
-        build-tools: 34.0.0
-        ndk: 27.3.13750724
-        cmake: 3.27.3
+        cmdline-tools-version: "9.0.5"
         accept-android-sdk-licenses: true
-        log-accepted-android-sdk-licenses: true
+        packages: |
+          platform-tools
+          platforms;android-34
+          build-tools;34.0.0
+          ndk;27.3.13750724
+          cmake;3.27.3
 
     # ---------- Configure local.properties ----------
     - name: Configure local.properties
@@ -62,6 +64,10 @@ jobs:
     # ---------- Make gradlew executable ----------
     - name: Make gradlew executable
       run: chmod +x android/gradlew
+
+    # ---------- Ensure libs directory exists ----------
+    - name: Ensure android/app/libs exists
+      run: mkdir -p android/app/libs
 
     # ---------- file_to_c utility ----------
     - name: Build file_to_c
