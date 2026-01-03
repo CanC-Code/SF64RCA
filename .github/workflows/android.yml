@@ -44,7 +44,7 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # --- Build file_to_c utility ---
+    # --- Dynamically create file_to_c utility ---
     - name: Build file_to_c utility
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
@@ -69,7 +69,7 @@ jobs:
         sudo chmod +x /usr/local/bin/file_to_c
         file_to_c --version || echo "file_to_c ready"
 
-    # --- Prepare Android launcher icon ---
+    # --- Copy launcher icon dynamically ---
     - name: Prepare Android launcher icon
       run: |
         RES_DIR=android/app/src/main/res/mipmap-anydpi-v26
@@ -94,7 +94,7 @@ jobs:
           done
         fi
 
-    # --- Generate mod headers dynamically ---
+    # --- Generate mod headers ---
     - name: Generate mod headers dynamically
       run: |
         mkdir -p android/app/src/main/cmods
@@ -105,7 +105,7 @@ jobs:
           done
         fi
 
-    # --- Generate patches_bin.c dynamically ---
+    # --- Generate patches_bin.c ---
     - name: Generate patches_bin.c dynamically
       run: |
         mkdir -p android/app/src/main/cpatches
@@ -130,8 +130,8 @@ jobs:
       working-directory: android
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-    # --- Verify APK ---
-    - name: Verify APK exists and signature
+    # --- Verify APK exists and is signed ---
+    - name: Verify APK
       run: |
         APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
         if [ ! -f "$APK_PATH" ]; then
@@ -141,7 +141,12 @@ jobs:
         echo "APK found: $APK_PATH"
         echo "Verifying APK signature..."
         $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK_PATH"
-        echo "APK verification passed. APK is installable."
+        if [ $? -eq 0 ]; then
+          echo "APK verification passed. APK is installable."
+        else
+          echo "APK verification failed!"
+          exit 1
+        fi
 
     # --- Test APK on Emulator ---
     - name: Test APK on Emulator
@@ -157,6 +162,11 @@ jobs:
         avd-name: test
         cores: 2
         disable-animations: true
+        disable-spellchecker: false
+        disable-linux-hw-accel: auto
+        enable-hw-keyboard: false
+        channel: stable
+        emulator-port: 5554
         script: |
           echo "Waiting for emulator..."
           adb wait-for-device
