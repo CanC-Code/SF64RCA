@@ -2,7 +2,6 @@
 
 #include <SDL.h>
 #include <android/log.h>
-#include "rt64_render_hooks.h"
 #include "ultramodern/ultramodern.hpp"
 #include "zelda_render.h"
 
@@ -29,20 +28,20 @@ bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
     surfaceWidth = width;
     surfaceHeight = height;
 
-    // Forward SDL window to RT64Context
-    // The WindowHandle for Android is just the SDL_Window pointer
     ultramodern::renderer::WindowHandle window_handle{};
     window_handle.window = window;
 
-    // Allocate RDRAM buffer (64MB for N64)
-    static uint8_t rdram[0x4000000]; 
-
+    static uint8_t rdram[0x4000000]; // 64MB RDRAM
     renderContext = zelda64::renderer::create_render_context(rdram, window_handle, true);
 
     if (!renderContext) {
         LOGE("Failed to create RT64Context");
         return false;
     }
+
+    // Set initial resolution in userConfig
+    auto& config = ultramodern::renderer::get_graphics_config();
+    renderContext->update_config(config, config);
 
     initialized = true;
     LOGI("RT64Context initialized (%dx%d)", width, height);
@@ -56,10 +55,14 @@ void AndroidRT64Wrapper::resize(int width, int height) {
     surfaceWidth = width;
     surfaceHeight = height;
 
-    // TODO: RT64Context should expose a resize if swap chain needs adjustment
-    // For now, just re-initialize user config
+    // Update userConfig resolution to match new swap chain size
     auto& config = ultramodern::renderer::get_graphics_config();
+    config.manual_width = width;
+    config.manual_height = height;
+
     renderContext->update_config(config, config);
+
+    LOGI("RT64Context resized to %dx%d", width, height);
 }
 
 void AndroidRT64Wrapper::renderFrame() {
