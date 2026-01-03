@@ -39,34 +39,41 @@ jobs:
         ndk: 25.2.9519653
         cmake: 3.22.1
 
-    # --- Cache file_to_c ---
-    - name: Cache file_to_c binary
-      id: filetoc-cache
+    # --- Cache mupen64plus-utils repository ---
+    - name: Cache mupen64plus-utils
+      id: utils-cache
       uses: actions/cache@v3
       with:
-        path: /usr/local/bin/file_to_c
-        key: filetoc-${{ runner.os }}-v1
+        path: /tmp/mupen64plus-utils
+        key: utils-${{ runner.os }}-v1
 
-    - name: Build file_to_c from mupen64plus-core
-      if: steps.filetoc-cache.outputs.cache-hit != 'true'
+    # --- Build file_to_c ---
+    - name: Build file_to_c from mupen64plus-utils
       run: |
-        echo "Cloning mupen64plus-core..."
-        git clone --depth 1 https://github.com/mupen64plus/mupen64plus-core.git /tmp/mupen64plus-core
-
-        echo "Searching for file_to_c.c..."
-        FILE_C=$(find /tmp/mupen64plus-core -type f -name file_to_c.c | head -n1)
-        if [ -z "$FILE_C" ]; then
-          echo "Error: file_to_c.c not found; cannot build file_to_c"
-          exit 1
-        fi
-        echo "Found file_to_c at $FILE_C"
-
-        echo "Compiling file_to_c..."
         FILE_TO_C_BUILD=/tmp/file_to_c_build
         mkdir -p $FILE_TO_C_BUILD
-        gcc "$FILE_C" -o "$FILE_TO_C_BUILD/file_to_c"
-        sudo cp "$FILE_TO_C_BUILD/file_to_c" /usr/local/bin/
-        chmod +x /usr/local/bin/file_to_c
+
+        if [ ! -f /usr/local/bin/file_to_c ]; then
+          if [ ! -d /tmp/mupen64plus-utils ]; then
+            echo "Cloning mupen64plus-utils..."
+            git clone --depth 1 https://github.com/mupen64plus/mupen64plus-utils.git /tmp/mupen64plus-utils
+          else
+            echo "Using cached mupen64plus-utils repo"
+          fi
+
+          FILE_C=/tmp/mupen64plus-utils/file_to_c/file_to_c.c
+          if [ ! -f "$FILE_C" ]; then
+            echo "Error: file_to_c.c not found in mupen64plus-utils"
+            exit 1
+          fi
+
+          echo "Compiling file_to_c..."
+          gcc "$FILE_C" -o "$FILE_TO_C_BUILD/file_to_c"
+          sudo cp "$FILE_TO_C_BUILD/file_to_c" /usr/local/bin/
+          chmod +x /usr/local/bin/file_to_c
+        else
+          echo "Using cached file_to_c binary"
+        fi
 
         echo "file_to_c version:"
         file_to_c --version || true
