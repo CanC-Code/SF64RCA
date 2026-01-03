@@ -1,151 +1,69 @@
-name: Android Build + Dynamic Assets
+name: Android CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
     steps:
-    # --- Checkout repository ---
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
+
+    - name: Setup Java
+      uses: actions/setup-java@v3
       with:
-        submodules: recursive
+        distribution: temurin
+        java-version: 17
 
-    # --- Install system dependencies ---
-    - name: Install system dependencies
+    - name: Install Android SDK components
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake git unzip wget gcc imagemagick
+        sudo mkdir -p $ANDROID_HOME/cmdline-tools
+        sudo chown -R $USER:$USER $ANDROID_HOME
 
-    # --- Setup JDK 17 ---
-    - name: Setup JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    # --- Setup Android SDK, NDK, and CMake ---
-    - name: Setup Android SDK & NDK
-      uses: android-actions/setup-android@v3
-      with:
-        cmdline-tools-version: "latest"
-        accept-android-sdk-licenses: true
-        packages: "platforms;android-34,build-tools;34.0.0,ndk;25.2.9519653,cmake;3.22.1"
-
-    # --- Explicitly accept all SDK licenses (catch MIPS/system image licenses) ---
-    - name: Accept all Android SDK licenses
-      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-    # --- Make gradlew executable ---
-    - name: Make gradlew executable
-      run: chmod +x android/gradlew
-
-    # --- Build file_to_c utility dynamically ---
-    - name: Cache file_to_c binary
-      id: file-to-c-cache
-      uses: actions/cache@v4
-      with:
-        path: /usr/local/bin/file_to_c
-        key: file-to-c-${{ runner.os }}-v2
-
-    - name: Build file_to_c if missing
-      if: steps.file-to-c-cache.outputs.cache-hit != 'true'
-      run: |
-        cat > /tmp/file_to_c.c << 'EOF'
-        #include <stdio.h>
-        #include <stdlib.h>
-        #include <string.h>
-        int main(int argc, char *argv[]) {
-            if(argc!=5){fprintf(stderr,"Usage: %s <input> <symbol> <out_c> <out_h>\n",argv[0]);return 1;}
-            const char *input=argv[1],*sym=argv[2],*out_c=argv[3],*out_h=argv[4];
-            FILE *in=fopen(input,"rb");if(!in){fprintf(stderr,"Cannot open %s\n",input);return 1;}
-            fseek(in,0,SEEK_END);long size=ftell(in);fseek(in,0,SEEK_SET);
-            FILE *h=fopen(out_h,"w");fprintf(h,"#ifndef %s_H\n#define %s_H\n\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n\n#endif\n",sym,sym,sym,sym);fclose(h);
-            FILE *c=fopen(out_c,"w");fprintf(c,"#include \"%s\"\n\nconst unsigned char %s[]={\n",strrchr(out_h,'/')?strrchr(out_h,'/')+1:out_h,sym);
-            unsigned char b;long count=0;while(fread(&b,1,1,in)==1){if(count%16==0)fprintf(c,"    ");fprintf(c,"0x%02x",b);count++;if(count<size){fprintf(c,",");if(count%16==0)fprintf(c,"\n");else fprintf(c," ");}}fprintf(c,"\n};\nconst unsigned int %s_size=%ld;\n",sym,size);fclose(in);fclose(c);
-            printf("Generated %s and %s for %s (%ld bytes)\n",out_c,out_h,input,size);return 0;
-        }
-        EOF
-        gcc /tmp/file_to_c.c -o /tmp/file_to_c
-        sudo mv /tmp/file_to_c /usr/local/bin/
-        sudo chmod +x /usr/local/bin/file_to_c
-
-    - name: Verify file_to_c
-      run: which file_to_c && file_to_c --help || true
-
-    # --- Convert HLSL shaders to C headers ---
-    - name: Generate shader headers
-      run: |
-        mkdir -p android/app/src/main/cshaders
-        for f in shaders/*.hlsl; do
-          [ -f "$f" ] || continue
-          base=$(basename "$f" .hlsl)
-          file_to_c "$f" "shader_$base" "android/app/src/main/cshaders/$base.c" "android/app/src/main/cshaders/$base.h"
-        done
-
-    # --- Convert .nrm mods to C headers ---
-    - name: Generate mod headers
-      run: |
-        mkdir -p android/app/src/main/cmods
-        for f in mods/*.nrm; do
-          [ -f "$f" ] || continue
-          base=$(basename "$f" .nrm)
-          file_to_c "$f" "$base" "android/app/src/main/cmods/$base.c" "android/app/src/main/cmods/$base.h"
-        done
-
-    # --- Convert patches.bin to C header ---
-    - name: Generate patches_bin.c
-      run: |
-        mkdir -p android/app/src/main/cpatches
-        if [ -f patches/patches.bin ]; then
-          file_to_c patches/patches.bin mm_patches_bin android/app/src/main/cpatches/patches_bin.c android/app/src/main/cpatches/patches_bin.h
+        # Download command line tools if missing
+        if [ ! -d "$ANDROID_HOME/cmdline-tools/latest" ]; then
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
+          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
         fi
 
-    # --- Generate Android launcher icons dynamically ---
-    - name: Generate Android mipmap icons
+        # Accept licenses automatically
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+
+        # Install required packages individually
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+          "platforms;android-34" \
+          "build-tools;34.0.1" \
+          "ndk;25.2.9519653" \
+          "cmake;3.22.1"
+
+    - name: Build Debug APK
       run: |
-        ICON_SRC="$GITHUB_WORKSPACE/assets/icons/512.png"
-        RES_DIR="$GITHUB_WORKSPACE/android/app/src/main/res"
+        cd android
+        ./gradlew assembleDebug --no-daemon
 
-        if [ ! -f "$ICON_SRC" ]; then
-          echo "Warning: $ICON_SRC not found, generating placeholder icon..."
-          mkdir -p $(dirname "$ICON_SRC")
-          convert -size 512x512 xc:purple "$ICON_SRC"
+    - name: Validate APK
+      run: |
+        APK_PATH=$(find android/app/build/outputs/apk/debug/ -name "*.apk" | head -n 1)
+        if [ -z "$APK_PATH" ]; then
+          echo "Error: APK not found!"
+          exit 1
         fi
+        echo "APK found at $APK_PATH"
+        # Optional: use apksigner to verify signature
+        $ANDROID_HOME/build-tools/34.0.1/apksigner verify "$APK_PATH"
 
-        mkdir -p $RES_DIR/mipmap-mdpi $RES_DIR/mipmap-hdpi $RES_DIR/mipmap-xhdpi $RES_DIR/mipmap-xxhdpi $RES_DIR/mipmap-xxxhdpi
-        convert "$ICON_SRC" -resize 48x48 $RES_DIR/mipmap-mdpi/ic_launcher.png
-        convert "$ICON_SRC" -resize 72x72 $RES_DIR/mipmap-hdpi/ic_launcher.png
-        convert "$ICON_SRC" -resize 96x96 $RES_DIR/mipmap-xhdpi/ic_launcher.png
-        convert "$ICON_SRC" -resize 144x144 $RES_DIR/mipmap-xxhdpi/ic_launcher.png
-        convert "$ICON_SRC" -resize 192x192 $RES_DIR/mipmap-xxxhdpi/ic_launcher.png
-
-    # --- Cache Gradle dependencies ---
-    - name: Cache Gradle
-      uses: actions/cache@v4
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v3
       with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-          android/.gradle
-        key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
-        restore-keys: gradle-${{ runner.os }}-
-
-    # --- Build APK ---
-    - name: Build Android APK
-      working-directory: android
-      run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: SF64RCA-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: error
+        name: debug-apk
+        path: android/app/build/outputs/apk/debug/*.apk
