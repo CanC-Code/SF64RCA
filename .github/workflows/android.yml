@@ -42,7 +42,7 @@ jobs:
 
       - name: Populate Android assets
         run: |
-          ASSETS_DIR=Android/app/src/main/assets
+          ASSETS_DIR=android/app/src/main/assets
           mkdir -p $ASSETS_DIR
 
           # Copy main runtime assets
@@ -55,7 +55,7 @@ jobs:
           # Any additional directories needed at runtime can be added similarly
 
       - name: Make Gradle wrapper executable
-        run: chmod +x Android/gradlew
+        run: chmod +x android/gradlew
 
       - name: Build debug APK
         working-directory: Android
@@ -69,4 +69,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Starfox64RCA-debug-apk
-          path: Android/app/build/outputs/apk/debug/*.apk
+          path: android/app/build/outputs/apk/debug/*.apk
