@@ -1,80 +1,120 @@
 #include "AndroidRT64Wrapper.h"
 
-// Include RT64 headers from submodule
-#include "../../../lib/rt64/include/rt64.h"
-#include "../../../lib/rt64/include/rt64_render_context.h"
+#include <SDL.h>
+#include <SDL_vulkan.h>
 
-#include <iostream>
+#include <rt64_render_device.h>
+#include <rt64_render_context.h>
 
-AndroidRT64Wrapper::AndroidRT64Wrapper()
-    : context(nullptr)
-{
-}
+#include <android/log.h>
 
-AndroidRT64Wrapper::~AndroidRT64Wrapper()
-{
+#define LOG_TAG "AndroidRT64Wrapper"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+namespace SF64RCA {
+
+AndroidRT64Wrapper::AndroidRT64Wrapper() = default;
+
+AndroidRT64Wrapper::~AndroidRT64Wrapper() {
     shutdown();
 }
 
-bool AndroidRT64Wrapper::initialize(void* windowHandle, int width, int height)
-{
-    if (context) {
-        std::cerr << "[RT64] Already initialized\n";
+bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
+    if (initialized) {
+        return true;
+    }
+
+    if (!window) {
+        LOGE("SDL_Window is null");
         return false;
     }
 
-    context = RT64CreateRenderContext();
-    if (!context) {
-        std::cerr << "[RT64] Failed to create context\n";
+    sdlWindow = window;
+    surfaceWidth = width;
+    surfaceHeight = height;
+
+    // Create RT64 render device (Vulkan via SDL)
+    RT64::RenderDevice::CreateInfo deviceInfo{};
+    deviceInfo.sdlWindow = sdlWindow;
+
+    renderDevice = RT64::RenderDevice::Create(deviceInfo);
+    if (!renderDevice) {
+        LOGE("Failed to create RT64 RenderDevice");
         return false;
     }
 
-    RT64InitSettings settings{};
-    settings.windowHandle = windowHandle;
-    settings.width = width;
-    settings.height = height;
-    settings.enableUpscaling = true;
-    settings.enableInterpolation = true;
+    // Create render context
+    RT64::RenderContext::CreateInfo contextInfo{};
+    contextInfo.device = renderDevice;
+    contextInfo.width = surfaceWidth;
+    contextInfo.height = surfaceHeight;
 
-    if (!RT64Initialize(context, &settings)) {
-        std::cerr << "[RT64] Initialization failed\n";
-        context = nullptr;
+    renderContext = RT64::RenderContext::Create(contextInfo);
+    if (!renderContext) {
+        LOGE("Failed to create RT64 RenderContext");
+        renderDevice->Destroy();
+        renderDevice = nullptr;
         return false;
     }
 
-    std::cout << "[RT64] Initialized successfully\n";
+    initialized = true;
+    LOGI("RT64 initialized (%dx%d)", width, height);
     return true;
 }
 
-void AndroidRT64Wrapper::shutdown()
-{
-    if (context) {
-        RT64Shutdown(context);
-        context = nullptr;
-        std::cout << "[RT64] Shutdown complete\n";
+void AndroidRT64Wrapper::resize(int width, int height) {
+    if (!initialized || !renderContext) {
+        return;
     }
+
+    if (width == surfaceWidth && height == surfaceHeight) {
+        return;
+    }
+
+    surfaceWidth = width;
+    surfaceHeight = height;
+
+    renderContext->Resize(width, height);
 }
 
-void AndroidRT64Wrapper::renderFrame(const uint8_t* frameBuffer, int width, int height)
-{
-    if (!context) return;
+void AndroidRT64Wrapper::renderFrame() {
+    if (!initialized || !renderContext) {
+        return;
+    }
 
-    RT64FrameSettings frameSettings{};
-    frameSettings.frameBuffer = frameBuffer;
-    frameSettings.width = width;
-    frameSettings.height = height;
+    renderContext->BeginFrame();
 
-    RT64RenderFrame(context, &frameSettings);
+    // NOTE:
+    // Actual draw submission will come from the SF64RCA renderer
+    // via RT64 command lists. This is intentionally empty for now.
+
+    renderContext->EndFrame();
 }
 
-void AndroidRT64Wrapper::resize(int width, int height)
-{
-    if (!context) return;
+void AndroidRT64Wrapper::shutdown() {
+    if (!initialized) {
+        return;
+    }
 
-    RT64ResizeViewport(context, width, height);
+    if (renderContext) {
+        renderContext->Destroy();
+        renderContext = nullptr;
+    }
+
+    if (renderDevice) {
+        renderDevice->Destroy();
+        renderDevice = nullptr;
+    }
+
+    sdlWindow = nullptr;
+    initialized = false;
+
+    LOGI("RT64 shutdown complete");
 }
 
-RT64RenderContext* AndroidRT64Wrapper::getContext()
-{
-    return context;
+bool AndroidRT64Wrapper::isInitialized() const {
+    return initialized;
 }
+
+} // namespace SF64RCA
