@@ -199,9 +199,3 @@ target_link_libraries(starfox64recompiled
 set_target_properties(starfox64recompiled PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 )
-
-# -------------------------------
-# Notes
-# -------------------------------
-# ROM-dependent preprocessing steps are deferred to runtime.
-# On first launch, the app should prompt the user to supply the Starfox64 ROM.
