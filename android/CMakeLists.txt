@@ -117,6 +117,8 @@ file(GLOB_RECURSE GAME_SOURCES
 # Automatically include Gradle-generated C files
 # -------------------------------
 set(GENERATED_SOURCES "")
+
+# Gradle generates files into build/generated/<dir>
 set(GENERATED_DIRS
     "${CMAKE_SOURCE_DIR}/../app/build/generated/cshaders"
     "${CMAKE_SOURCE_DIR}/../app/build/generated/cmods"
@@ -199,3 +201,9 @@ target_link_libraries(starfox64recompiled
 set_target_properties(starfox64recompiled PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 )
+
+# -------------------------------
+# Notes
+# -------------------------------
+# ROM-dependent preprocessing steps are deferred to runtime.
+# On first launch, the app should prompt the user to supply the Starfox64 ROM.
