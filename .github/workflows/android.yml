@@ -40,23 +40,34 @@ jobs:
         cmake: 3.22.1
 
     # --- Cache file_to_c ---
-    - name: Cache file_to_c
+    - name: Cache file_to_c binary
       id: filetoc-cache
       uses: actions/cache@v3
       with:
         path: /usr/local/bin/file_to_c
         key: filetoc-${{ runner.os }}-v1
 
-    - name: Build file_to_c from mupen64plus-utils
+    - name: Build file_to_c from mupen64plus-core
       if: steps.filetoc-cache.outputs.cache-hit != 'true'
       run: |
-        echo "Building file_to_c..."
+        echo "Cloning mupen64plus-core..."
+        git clone --depth 1 https://github.com/mupen64plus/mupen64plus-core.git /tmp/mupen64plus-core
+
+        echo "Searching for file_to_c.c..."
+        FILE_C=$(find /tmp/mupen64plus-core -type f -name file_to_c.c | head -n1)
+        if [ -z "$FILE_C" ]; then
+          echo "Error: file_to_c.c not found; cannot build file_to_c"
+          exit 1
+        fi
+        echo "Found file_to_c at $FILE_C"
+
+        echo "Compiling file_to_c..."
         FILE_TO_C_BUILD=/tmp/file_to_c_build
         mkdir -p $FILE_TO_C_BUILD
-        git clone --depth 1 https://github.com/mupen64plus/mupen64plus-utils.git /tmp/mupen64plus-utils
-        gcc /tmp/mupen64plus-utils/file_to_c/file_to_c.c -o $FILE_TO_C_BUILD/file_to_c
-        sudo cp $FILE_TO_C_BUILD/file_to_c /usr/local/bin/
+        gcc "$FILE_C" -o "$FILE_TO_C_BUILD/file_to_c"
+        sudo cp "$FILE_TO_C_BUILD/file_to_c" /usr/local/bin/
         chmod +x /usr/local/bin/file_to_c
+
         echo "file_to_c version:"
         file_to_c --version || true
 
