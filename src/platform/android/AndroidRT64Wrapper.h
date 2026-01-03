@@ -1,12 +1,12 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 
 struct SDL_Window;
 
-namespace RT64 {
-    struct RenderDevice;
-    struct RenderContext;
+namespace zelda64::renderer {
+    class RT64Context;
 }
 
 namespace SF64RCA {
@@ -14,9 +14,8 @@ namespace SF64RCA {
 /**
  * AndroidRT64Wrapper
  *
- * This class owns the RT64 renderer lifecycle on Android.
- * It isolates RT64 from the rest of the engine so the submodule
- * remains untouched.
+ * Bridges SDL window management and the RT64 renderer on Android.
+ * Manages the RT64Context lifecycle and exposes basic render and resize operations.
  */
 class AndroidRT64Wrapper {
 public:
@@ -55,14 +54,12 @@ public:
 
 private:
     bool initialized = false;
-
     SDL_Window* sdlWindow = nullptr;
-
-    RT64::RenderDevice* renderDevice = nullptr;
-    RT64::RenderContext* renderContext = nullptr;
 
     int surfaceWidth = 0;
     int surfaceHeight = 0;
+
+    std::unique_ptr<zelda64::renderer::RT64Context> renderContext;
 };
 
 } // namespace SF64RCA
