@@ -36,50 +36,48 @@ jobs:
         ndk: 25.2.9519653
         cmake: 3.22.1
 
-    # --- Cache mupen64plus-utils repository ---
-    - name: Cache mupen64plus-utils
-      id: utils-cache
+    # --- Checkout mupen64plus-utils using actions/checkout ---
+    - name: Checkout mupen64plus-utils
+      uses: actions/checkout@v4
+      with:
+        repository: mupen64plus/mupen64plus-utils
+        path: mupen64plus-utils
+        ref: master
+
+    # --- Cache file_to_c binary ---
+    - name: Cache file_to_c binary
+      id: file-to-c-cache
       uses: actions/cache@v4
       with:
-        path: /tmp/mupen64plus-utils
-        key: utils-${{ runner.os }}-v1
+        path: /usr/local/bin/file_to_c
+        key: file-to-c-${{ runner.os }}-v1
 
     # --- Build file_to_c ---
     - name: Build file_to_c from mupen64plus-utils
+      if: steps.file-to-c-cache.outputs.cache-hit != 'true'
       run: |
         FILE_TO_C_BUILD=/tmp/file_to_c_build
         mkdir -p $FILE_TO_C_BUILD
 
-        if [ ! -f /usr/local/bin/file_to_c ]; then
-          if [ ! -d /tmp/mupen64plus-utils ]; then
-            echo "Cloning mupen64plus-utils..."
-            git clone --depth 1 https://github.com/mupen64plus/mupen64plus-utils.git /tmp/mupen64plus-utils 2>&1 || {
-              echo "Git clone failed, trying with GIT_TERMINAL_PROMPT=0"
-              GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/mupen64plus/mupen64plus-utils.git /tmp/mupen64plus-utils
-            }
-          else
-            echo "Using cached mupen64plus-utils repo"
-          fi
-
-          FILE_C=/tmp/mupen64plus-utils/file_to_c/file_to_c.c
-          if [ ! -f "$FILE_C" ]; then
-            echo "Error: file_to_c.c not found in mupen64plus-utils"
-            echo "Contents of /tmp/mupen64plus-utils:"
-            ls -la /tmp/mupen64plus-utils/ || true
-            exit 1
-          fi
-
-          echo "Compiling file_to_c..."
-          gcc "$FILE_C" -o "$FILE_TO_C_BUILD/file_to_c"
-          sudo cp "$FILE_TO_C_BUILD/file_to_c" /usr/local/bin/
-          sudo chmod +x /usr/local/bin/file_to_c
-        else
-          echo "Using cached file_to_c binary"
+        FILE_C=$GITHUB_WORKSPACE/mupen64plus-utils/file_to_c/file_to_c.c
+        if [ ! -f "$FILE_C" ]; then
+          echo "Error: file_to_c.c not found at $FILE_C"
+          echo "Contents of mupen64plus-utils:"
+          ls -la $GITHUB_WORKSPACE/mupen64plus-utils/ || true
+          exit 1
         fi
 
+        echo "Compiling file_to_c..."
+        gcc "$FILE_C" -o "$FILE_TO_C_BUILD/file_to_c"
+        sudo cp "$FILE_TO_C_BUILD/file_to_c" /usr/local/bin/
+        sudo chmod +x /usr/local/bin/file_to_c
+
+    - name: Verify file_to_c installation
+      run: |
         echo "file_to_c location check:"
         which file_to_c || echo "file_to_c not in PATH"
         ls -la /usr/local/bin/file_to_c || echo "file_to_c binary not found"
+        /usr/local/bin/file_to_c --version 2>&1 || echo "file_to_c installed successfully"
 
     # --- Cache generated shader headers ---
     - name: Cache generated shader headers
