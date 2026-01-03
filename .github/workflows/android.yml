@@ -5,34 +5,31 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
 
-    env:
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
-
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake git unzip wget
+        sudo apt-get install -y build-essential cmake git unzip wget gcc
 
     - name: Setup JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
-        distribution: temurin
-        java-version: 17
+        distribution: 'temurin'
+        java-version: '17'
 
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
+      uses: android-actions/setup-android@v3
       with:
         api-level: 34
         build-tools: 34.0.0
@@ -42,7 +39,7 @@ jobs:
     # --- Cache mupen64plus-utils repository ---
     - name: Cache mupen64plus-utils
       id: utils-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: /tmp/mupen64plus-utils
         key: utils-${{ runner.os }}-v1
@@ -56,7 +53,10 @@ jobs:
         if [ ! -f /usr/local/bin/file_to_c ]; then
           if [ ! -d /tmp/mupen64plus-utils ]; then
             echo "Cloning mupen64plus-utils..."
-            git clone --depth 1 https://github.com/mupen64plus/mupen64plus-utils.git /tmp/mupen64plus-utils
+            git clone --depth 1 https://github.com/mupen64plus/mupen64plus-utils.git /tmp/mupen64plus-utils 2>&1 || {
+              echo "Git clone failed, trying with GIT_TERMINAL_PROMPT=0"
+              GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/mupen64plus/mupen64plus-utils.git /tmp/mupen64plus-utils
+            }
           else
             echo "Using cached mupen64plus-utils repo"
           fi
@@ -64,24 +64,27 @@ jobs:
           FILE_C=/tmp/mupen64plus-utils/file_to_c/file_to_c.c
           if [ ! -f "$FILE_C" ]; then
             echo "Error: file_to_c.c not found in mupen64plus-utils"
+            echo "Contents of /tmp/mupen64plus-utils:"
+            ls -la /tmp/mupen64plus-utils/ || true
             exit 1
           fi
 
           echo "Compiling file_to_c..."
           gcc "$FILE_C" -o "$FILE_TO_C_BUILD/file_to_c"
           sudo cp "$FILE_TO_C_BUILD/file_to_c" /usr/local/bin/
-          chmod +x /usr/local/bin/file_to_c
+          sudo chmod +x /usr/local/bin/file_to_c
         else
           echo "Using cached file_to_c binary"
         fi
 
-        echo "file_to_c version:"
-        file_to_c --version || true
+        echo "file_to_c location check:"
+        which file_to_c || echo "file_to_c not in PATH"
+        ls -la /usr/local/bin/file_to_c || echo "file_to_c binary not found"
 
     # --- Cache generated shader headers ---
     - name: Cache generated shader headers
       id: shader-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: generated_shaders
         key: shader-cache-${{ runner.os }}-${{ hashFiles('shaders/*.hlsl') }}
@@ -90,16 +93,20 @@ jobs:
       if: steps.shader-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p generated_shaders
-        for vs in shaders/*.hlsl; do
-            name=$(basename "$vs")
-            out="$GITHUB_WORKSPACE/generated_shaders/$name"
-            file_to_c "$vs" "shader_$(basename $vs .hlsl)" "$out" "$out.h"
-        done
+        if ls shaders/*.hlsl 1> /dev/null 2>&1; then
+          for vs in shaders/*.hlsl; do
+              name=$(basename "$vs")
+              out="$GITHUB_WORKSPACE/generated_shaders/$name"
+              /usr/local/bin/file_to_c "$vs" "shader_$(basename $vs .hlsl)" "$out" "$out.h"
+          done
+        else
+          echo "No HLSL shader files found in shaders/"
+        fi
 
     # --- Cache generated mod headers ---
     - name: Cache generated mod headers
       id: mod-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: android/app/src/main/cmods
         key: mod-cache-${{ runner.os }}-${{ hashFiles('mods/*.nrm') }}
@@ -108,16 +115,20 @@ jobs:
       if: steps.mod-cache.outputs.cache-hit != 'true'
       run: |
         mkdir -p android/app/src/main/cmods
-        for mod in mods/*.nrm; do
-            modname=$(basename "$mod" .nrm)
-            out="$GITHUB_WORKSPACE/android/app/src/main/cmods/$modname.c"
-            file_to_c "$mod" "$modname" "$out" "$out.h"
-        done
+        if ls mods/*.nrm 1> /dev/null 2>&1; then
+          for mod in mods/*.nrm; do
+              modname=$(basename "$mod" .nrm)
+              out="$GITHUB_WORKSPACE/android/app/src/main/cmods/$modname.c"
+              /usr/local/bin/file_to_c "$mod" "$modname" "$out" "$out.h"
+          done
+        else
+          echo "No .nrm mod files found in mods/"
+        fi
 
     # --- Cache patches_bin.c ---
     - name: Cache patches_bin.c
       id: patches-cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: RecompiledPatches/patches_bin.c
         key: patches-cache-${{ runner.os }}-${{ hashFiles('patches/patches.bin') }}
@@ -127,20 +138,33 @@ jobs:
       run: |
         mkdir -p RecompiledPatches
         if [ -f patches/patches.bin ]; then
-            file_to_c patches/patches.bin mm_patches_bin RecompiledPatches/patches_bin.c RecompiledPatches/patches_bin.h
+            /usr/local/bin/file_to_c patches/patches.bin mm_patches_bin RecompiledPatches/patches_bin.c RecompiledPatches/patches_bin.h
         else
             echo "Warning: patches/patches.bin not found; skipping patches_bin.c"
         fi
 
-    # --- Cache Gradle build ---
-    - name: Cache Gradle build
-      uses: actions/cache@v3
+    # --- Cache Gradle wrapper and dependencies ---
+    - name: Cache Gradle
+      uses: actions/cache@v4
       with:
         path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
           android/.gradle
-          android/build
-        key: gradle-${{ runner.os }}-v1
+        key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+        restore-keys: |
+          gradle-${{ runner.os }}-
+
+    - name: Make gradlew executable
+      run: chmod +x android/gradlew
 
     - name: Build Android APK
       working-directory: android
-      run: ./gradlew assembleDebug --no-daemon
+      run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SF64RCA-debug-apk
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: error
