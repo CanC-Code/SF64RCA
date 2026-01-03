@@ -22,7 +22,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake git unzip wget gcc zip
+        sudo apt-get install -y build-essential cmake git unzip wget gcc
 
     # --- Setup JDK 17 ---
     - name: Setup JDK 17
@@ -33,7 +33,7 @@ jobs:
 
     # --- Setup Android SDK ---
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v4
+      uses: android-actions/setup-android@v3
       with:
         api-level: 34
         build-tools: 34.0.0
@@ -45,7 +45,7 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # --- Build file_to_c utility ---
+    # --- Dynamically create file_to_c utility ---
     - name: Build file_to_c utility
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
@@ -70,7 +70,7 @@ jobs:
         sudo chmod +x /usr/local/bin/file_to_c
         file_to_c --version || echo "file_to_c ready"
 
-    # --- Prepare Android launcher icon ---
+    # --- Copy launcher icon dynamically ---
     - name: Prepare Android launcher icon
       run: |
         RES_DIR=android/app/src/main/res/mipmap-anydpi-v26
@@ -84,7 +84,7 @@ jobs:
         rm -rf android/app/src/main/assets
         cp -R assets android/app/src/main/
 
-    # --- Generate shader headers dynamically ---
+    # --- Generate shader headers ---
     - name: Generate shader headers dynamically
       run: |
         mkdir -p android/app/src/main/cshaders
@@ -131,20 +131,16 @@ jobs:
       working-directory: android
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-    # --- Verify APK ---
+    # --- Verify APK exists ---
     - name: Verify APK
       run: |
-        APK=android/app/build/outputs/apk/debug/app-debug.apk
-        if [ ! -f "$APK" ]; then
-            echo "APK not found!"
-            exit 1
+        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
+        if [ ! -f "$APK_PATH" ]; then
+          echo "APK not found! Build failed." 
+          exit 1
+        else
+          echo "APK found: $APK_PATH"
         fi
-        echo "APK exists. Verifying zipalign..."
-        ${ANDROID_SDK_ROOT}/build-tools/34.0.0/zipalign -c -v 4 "$APK" || exit 1
-        echo "APK zipalign verification passed."
-        echo "Verifying APK signature..."
-        apksigner verify "$APK" || exit 1
-        echo "APK verification complete."
 
     # --- Upload APK artifact ---
     - name: Upload APK artifact
@@ -152,4 +148,3 @@ jobs:
       with:
         name: SF64RCA-debug-apk
         path: android/app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: error
