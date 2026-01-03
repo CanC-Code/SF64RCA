@@ -1,27 +1,36 @@
-plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
-}
+// android/app/build.gradle
+apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.canc.starfox64"
-    compileSdk = 34
+    namespace 'com.canccode.sf64'
+    compileSdk 34
 
     defaultConfig {
-        applicationId = "com.canc.starfox64"
-        minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        applicationId "com.canccode.sf64"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        externalNativeBuild {
+            cmake {
+                // NDK version
+                version "3.27.3"
+            }
         }
 
-        // Use NDK 27.3.13750724
-        ndkVersion = "27.3.13750724"
+        ndk {
+            // Explicit NDK version
+            version "27.3.13750724"
+        }
+
+        // If you use native libraries
+        externalNativeBuild {
+            cmake {
+                path "CMakeLists.txt"
+                arguments "-DANDROID_STL=c++_static"
+            }
+        }
     }
 
     buildTypes {
@@ -29,82 +38,28 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
-        debug {
-            debuggable true
-            jniDebuggable true
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-
-    buildFeatures {
-        viewBinding = true
-    }
-
-    packagingOptions {
-        jniLibs {
-            useLegacyPackaging = true
-        }
     }
 
     externalNativeBuild {
         cmake {
-            path = file("CMakeLists.txt")
-            version = "3.27.3"  // Match workflow
+            path "CMakeLists.txt"
+            version "3.27.3"
         }
     }
-}
 
-// -------------------------------
-// Dynamic assets preprocessing
-// -------------------------------
-def fileToCExecutable = "../file_to_c"
-def dynamicDirs = ["cshaders", "cmods", "cpatches"]
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
 
-def generatedTasks = []
-
-dynamicDirs.each { dirName ->
-    def dir = file("../app/src/main/${dirName}")
-    fileTree(dir).matching { include "**/*.nrm" }.files.each { File f ->
-        def outDir = file("${buildDir}/generated/${dirName}")
-        outDir.mkdirs()
-        def outC = file("${outDir}/${f.nameWithoutExtension}.c")
-        def outH = file("${outDir}/${f.nameWithoutExtension}.h")
-
-        def taskName = "generate${f.nameWithoutExtension.capitalize()}"
-        def genTask = tasks.register(taskName, Exec) {
-            inputs.file f
-            outputs.files outC, outH
-            commandLine fileToCExecutable, f.absolutePath, f.nameWithoutExtension, outC.absolutePath, outH.absolutePath
-        }
-
-        generatedTasks << genTask
+    kotlinOptions {
+        jvmTarget = "17"
     }
 }
 
-// Ensure native build depends on generated sources
-afterEvaluate {
-    android.externalNativeBuild.cmake.tasks.each { cmakeTask ->
-        cmakeTask.dependsOn(generatedTasks)
-    }
-}
-
-// -------------------------------
-// Dependencies
-// -------------------------------
 dependencies {
-    implementation 'androidx.core:core-ktx:1.13.0'
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    implementation fileTree(dir: "libs", include: ["*.jar"])
+    implementation "androidx.core:core-ktx:1.12.0"
+    implementation "androidx.appcompat:appcompat:1.7.0"
+    implementation "com.google.android.material:material:1.10.0"
 }
