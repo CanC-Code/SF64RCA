@@ -41,13 +41,23 @@ jobs:
         distribution: temurin
         java-version: 17
 
-    # ---------- Android SDK / NDK / CMake ----------
-    - name: Setup Android SDK, NDK, CMake
+    # ---------- Android SDK / NDK ----------
+    - name: Setup Android SDK, NDK
       uses: android-actions/setup-android@v3
       with:
         accept-android-sdk-licenses: true
         log-accepted-android-sdk-licenses: true
-        packages: platform-tools platforms;android-34 build-tools;34.0.0 ndk;27.3.13750724 cmake;3.27.3
+        packages: platform-tools platforms;android-34 build-tools;34.0.0 ndk;27.3.13750724
+
+    # ---------- Install CMake 3.27.3 ----------
+    - name: Install CMake 3.27.3
+      run: |
+        CMAKE_VERSION=3.27.3
+        wget -q https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
+        tar -xzf cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
+        sudo mv cmake-${CMAKE_VERSION}-linux-x86_64 /opt/cmake-${CMAKE_VERSION}
+        sudo ln -sf /opt/cmake-${CMAKE_VERSION}/bin/cmake /usr/local/bin/cmake
+        cmake --version
 
     # ---------- Configure local.properties ----------
     - name: Configure local.properties
@@ -55,7 +65,7 @@ jobs:
         mkdir -p android
         echo "sdk.dir=$ANDROID_HOME" > android/local.properties
         echo "ndk.dir=$ANDROID_NDK_HOME" >> android/local.properties
-        echo "cmake.dir=$ANDROID_HOME/cmake/3.27.3" >> android/local.properties
+        echo "cmake.dir=/opt/cmake-3.27.3" >> android/local.properties
 
     # ---------- Make gradlew executable ----------
     - name: Make gradlew executable
