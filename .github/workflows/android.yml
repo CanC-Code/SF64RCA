@@ -41,15 +41,8 @@ jobs:
       with:
         api-level: 34
         build-tools: 34.0.0
-        ndk: 25.2.9519653
+        ndk: 25.1.8937393      # <-- fixed to match android.ndkVersion
         cmake: 3.27.3
-
-    # ---------- Force correct NDK ----------
-    - name: Force correct NDK path
-      run: |
-        export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/25.2.9519653"
-        echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-        export PATH="$ANDROID_NDK_HOME:$PATH"
 
     # ---------- Configure local.properties ----------
     - name: Configure local.properties for Gradle
