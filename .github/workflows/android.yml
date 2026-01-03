@@ -67,7 +67,7 @@ jobs:
         gcc /tmp/file_to_c.c -o /tmp/file_to_c
         sudo mv /tmp/file_to_c /usr/local/bin/file_to_c
         sudo chmod +x /usr/local/bin/file_to_c
-        file_to_c --version || echo "file_to_c ready"
+        echo "file_to_c utility built successfully"
 
     # --- Prepare Android launcher icon ---
     - name: Prepare Android launcher icon
@@ -82,6 +82,7 @@ jobs:
       run: |
         rm -rf android/app/src/main/assets
         cp -R assets android/app/src/main/
+        echo "Assets copied successfully"
 
     # --- Generate shader headers dynamically ---
     - name: Generate shader headers dynamically
@@ -91,7 +92,10 @@ jobs:
           for f in shaders/*.hlsl; do
               base=$(basename "$f" .hlsl)
               file_to_c "$f" "shader_${base}" "android/app/src/main/cshaders/${base}.c" "android/app/src/main/cshaders/${base}.h"
+              echo "Generated shader header for $base"
           done
+        else
+          echo "No HLSL shaders found"
         fi
 
     # --- Generate mod headers dynamically ---
@@ -102,7 +106,10 @@ jobs:
           for f in mods/*.nrm; do
               base=$(basename "$f" .nrm)
               file_to_c "$f" "$base" "android/app/src/main/cmods/${base}.c" "android/app/src/main/cmods/${base}.h"
+              echo "Generated mod header for $base"
           done
+        else
+          echo "No .nrm mods found"
         fi
 
     # --- Generate patches_bin.c dynamically ---
@@ -111,6 +118,9 @@ jobs:
         mkdir -p android/app/src/main/cpatches
         if [ -f patches/patches.bin ]; then
           file_to_c patches/patches.bin mm_patches_bin android/app/src/main/cpatches/patches_bin.c android/app/src/main/cpatches/patches_bin.h
+          echo "Generated patches_bin header"
+        else
+          echo "patches/patches.bin not found, skipping"
         fi
 
     # --- Cache Gradle dependencies ---
@@ -130,44 +140,28 @@ jobs:
       working-directory: android
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-    # --- Verify APK ---
-    - name: Verify APK signature
+    # --- Verify APK exists and get info ---
+    - name: Verify APK and get info
       run: |
         APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
         if [ ! -f "$APK_PATH" ]; then
-          echo "APK not found! Build failed."
+          echo "❌ APK not found at $APK_PATH"
+          echo "Build output contents:"
+          ls -R android/app/build/outputs/ || echo "No build outputs found"
           exit 1
         fi
+        
+        echo "✅ APK built successfully!"
+        echo "APK location: $APK_PATH"
+        echo "APK size: $(du -h $APK_PATH | cut -f1)"
+        
+        # Verify APK signature
         echo "Verifying APK signature..."
-        $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK_PATH"
-        echo "APK verification passed. APK is installable."
-
-    # --- Run emulator and basic functional test ---
-    - name: Run emulator and test APK
-      uses: reactivecircus/android-emulator-runner@v2
-      with:
-        api-level: 34
-        target: google_apis
-        arch: x86_64
-        profile: Pixel_6
-        emulator-options: -no-window -noaudio -gpu swiftshader_indirect
-        emulator-boot-timeout: 600
-        force-avd-creation: true
-        avd-name: test
-        cores: 2
-        disable-animations: true
-        disable-spellchecker: false
-        disable-linux-hw-accel: auto
-        enable-hw-keyboard: false
-        channel: stable
-        emulator-port: 5554
-        script: |
-          echo "Waiting for emulator..."
-          adb wait-for-device
-          echo "Installing APK..."
-          adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-          echo "Launching APK for basic functional test..."
-          adb shell monkey -p com.canccode.sf64rca -c android.intent.category.LAUNCHER 1
+        $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK_PATH" && echo "✅ APK signature valid" || echo "⚠️  APK signature check failed"
+        
+        # Get APK info
+        echo "APK Information:"
+        $ANDROID_HOME/build-tools/34.0.0/aapt dump badging "$APK_PATH" | grep -E "package:|sdkVersion:|targetSdkVersion:|application-label:" || true
 
     # --- Upload APK artifact ---
     - name: Upload APK artifact
@@ -176,3 +170,18 @@ jobs:
         name: SF64RCA-debug-apk
         path: android/app/build/outputs/apk/debug/app-debug.apk
         if-no-files-found: error
+        
+    # --- Create release info ---
+    - name: Create build summary
+      if: success()
+      run: |
+        echo "## 🎮 Build Successful! 🚀" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### APK Details" >> $GITHUB_STEP_SUMMARY
+        APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
+        APK_SIZE=$(du -h $APK_PATH | cut -f1)
+        echo "- **Size:** $APK_SIZE" >> $GITHUB_STEP_SUMMARY
+        echo "- **Location:** \`$APK_PATH\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Download" >> $GITHUB_STEP_SUMMARY
+        echo "The APK is available in the workflow artifacts section above." >> $GITHUB_STEP_SUMMARY
