@@ -1,66 +1,105 @@
 #include <SDL.h>
+#include <SDL_main.h>
 #include <string>
 #include <fstream>
+#include <vector>
 #include <filesystem>
 #include <cstdio>
 #include "nfd.h"
 
-// Forward declaration of your real desktop main()
-int main(int argc, char** argv);
+// Forward declarations
+int GameLoop(); // Your existing game loop
+bool InitializeEngine(const std::vector<uint8_t>& romData); // Engine init (patches, overlays, mods, shaders)
 
-// Android-safe entry point called from SDL_main
+// Copy file safely
+static bool copy_file(const std::filesystem::path& src, const std::filesystem::path& dst) {
+    std::ifstream in(src, std::ios::binary);
+    if (!in) return false;
+    std::ofstream out(dst, std::ios::binary);
+    if (!out) return false;
+    out << in.rdbuf();
+    return true;
+}
+
+// Show error via SDL dialog
+static void show_error(const char* msg) {
+    if (SDL_WasInit(SDL_INIT_VIDEO)) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Starfox64 Error", msg, nullptr);
+    }
+    SDL_Log("ERROR: %s", msg);
+}
+
 extern "C"
 int StarfoxMain(int argc, char** argv) {
-    // Determine app's internal storage path
-    std::string romDir(SDL_AndroidGetInternalStoragePath()); // SDL helper for Android
-    if (romDir.empty()) {
-        SDL_Log("ERROR: Cannot get internal storage path");
+    // Ensure SDL is initialized
+    if (SDL_Init(0) < 0) {
+        SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return -1;
     }
 
-    std::filesystem::path romPath = std::filesystem::path(romDir) / "Starfox64.z64";
+    // Determine internal storage path
+    std::string internalDir(SDL_AndroidGetInternalStoragePath());
+    if (internalDir.empty()) {
+        show_error("Cannot access internal storage.");
+        return -1;
+    }
+    std::filesystem::path romPath = std::filesystem::path(internalDir) / "Starfox64.z64";
 
-    // Check if ROM already exists
+    // First-launch: prompt for ROM if missing
     if (!std::filesystem::exists(romPath)) {
-        SDL_Log("No Starfox64 ROM found, prompting user...");
+        SDL_Log("No ROM found, prompting user...");
 
-        nfdchar_t *outPath = nullptr;
+        nfdchar_t* outPath = nullptr;
         nfdresult_t result = NFD_OpenDialog("z64,rom", nullptr, &outPath);
 
         if (result == NFD_OKAY) {
             SDL_Log("User selected ROM: %s", outPath);
+            std::filesystem::path selected(outPath);
 
-            // Copy selected ROM to internal storage
-            std::ifstream src(outPath, std::ios::binary);
-            std::ofstream dst(romPath, std::ios::binary);
-
-            if (!src || !dst) {
-                SDL_Log("ERROR: Failed to copy ROM to internal storage");
+            if (!copy_file(selected, romPath)) {
+                show_error("Failed to copy ROM to internal storage.");
                 free(outPath);
                 return -1;
             }
 
-            dst << src.rdbuf();
-            src.close();
-            dst.close();
-
             SDL_Log("ROM copied to: %s", romPath.string().c_str());
             free(outPath);
         } else if (result == NFD_CANCEL) {
-            SDL_Log("User cancelled ROM selection.");
+            show_error("ROM selection cancelled. Cannot continue.");
             return -1;
         } else {
-            SDL_Log("NFD error: %s", NFD_GetError());
+            std::string err = "NFD error: ";
+            err += NFD_GetError();
+            show_error(err.c_str());
             return -1;
         }
     } else {
         SDL_Log("ROM already exists: %s", romPath.string().c_str());
     }
 
-    // Pass ROM path as argv[1] to your main
-    char* argv_new[2];
-    argv_new[0] = argv[0];
-    argv_new[1] = const_cast<char*>(romPath.string().c_str());
+    // Load ROM into memory
+    std::vector<uint8_t> romData;
+    {
+        std::ifstream romFile(romPath, std::ios::binary | std::ios::ate);
+        if (!romFile) {
+            show_error(("Failed to open ROM: " + romPath.string()).c_str());
+            return -1;
+        }
+        auto size = romFile.tellg();
+        romFile.seekg(0, std::ios::beg);
+        romData.resize(size);
+        romFile.read(reinterpret_cast<char*>(romData.data()), size);
+    }
 
-    return main(2, argv_new);
+    // Initialize engine (patches, overlays, mods, shaders)
+    if (!InitializeEngine(romData)) {
+        show_error("Failed to initialize recompiled engine.");
+        return -1;
+    }
+
+    // Start main game loop
+    int ret = GameLoop();
+
+    SDL_Quit();
+    return ret;
 }
