@@ -1,4 +1,4 @@
-name: Android Build & Generate Assets
+name: Android Build + file_to_c Generation
 
 on:
   push:
@@ -7,72 +7,125 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
+  build-android:
+    runs-on: ubuntu-latest
+
     env:
-      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
+      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      GITHUB_WORKSPACE: ${{ github.workspace }}
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Install dependencies
+    - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake git unzip wget
 
-    - name: Cache file_to_c build
+    - name: Setup JDK 17
+      uses: actions/setup-java@v3
+      with:
+        distribution: temurin
+        java-version: 17
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+      with:
+        api-level: 34
+        build-tools: 34.0.0
+        ndk: 25.2.9519653
+        cmake: 3.22.1
+
+    # --- file_to_c caching ---
+    - name: Cache file_to_c
+      id: filetoc-cache
       uses: actions/cache@v3
       with:
         path: /tmp/mupen64plus-core/utils/file_to_c/build/file_to_c
-        key: file_to_c-${{ runner.os }}-v1
-        restore-keys: |
-          file_to_c-${{ runner.os }}-
+        key: filetoc-${{ runner.os }}-v1
 
-    - name: Build file_to_c from Mupen64Plus source if cache missed
+    - name: Build file_to_c from Mupen64Plus source
       run: |
-        if [ ! -f /tmp/mupen64plus-core/utils/file_to_c/build/file_to_c ]; then
-          git clone --depth 1 https://github.com/mupen64plus/mupen64plus-core.git /tmp/mupen64plus-core
-          cd /tmp/mupen64plus-core/utils/file_to_c
-          mkdir -p build && cd build
-          cmake ..
-          make
-          sudo cp file_to_c /usr/local/bin/
-        else
-          echo "Using cached file_to_c"
-          sudo cp /tmp/mupen64plus-core/utils/file_to_c/build/file_to_c /usr/local/bin/
+        FILE_TO_C_PATH=/tmp/mupen64plus-core/utils/file_to_c
+        if [ ! -f /usr/local/bin/file_to_c ]; then
+          if [ ! -f $FILE_TO_C_PATH/build/file_to_c ]; then
+            git clone --depth 1 https://github.com/mupen64plus/mupen64plus-core.git /tmp/mupen64plus-core
+            cd $FILE_TO_C_PATH
+            mkdir -p build && cd build
+            cmake ..
+            make
+          fi
+          sudo cp $FILE_TO_C_PATH/build/file_to_c /usr/local/bin/
         fi
-        file_to_c --version || echo "file_to_c installed"
+        echo "file_to_c version:"
+        file_to_c --version
 
-    - name: Generate shaders, mods, and patches
+    # --- Cache generated shader headers ---
+    - name: Cache generated shader headers
+      id: shader-cache
+      uses: actions/cache@v3
+      with:
+        path: generated_shaders
+        key: shader-cache-${{ runner.os }}-${{ hashFiles('shaders/*.hlsl') }}
+
+    - name: Generate HLSL shader headers
+      if: steps.shader-cache.outputs.cache-hit != 'true'
       run: |
-        mkdir -p generated_shaders generated_mods RecompiledPatches android/app/src/main/cmods
-
-        echo "Generating HLSL shader headers..."
+        mkdir -p generated_shaders
         for vs in shaders/*.hlsl; do
             name=$(basename "$vs")
             out="$GITHUB_WORKSPACE/generated_shaders/$name"
             file_to_c "$vs" "shader_$(basename $vs .hlsl)" "$out" "$out.h"
         done
 
-        echo "Converting .nrm mods to C headers..."
+    # --- Cache generated mod headers ---
+    - name: Cache generated mod headers
+      id: mod-cache
+      uses: actions/cache@v3
+      with:
+        path: android/app/src/main/cmods
+        key: mod-cache-${{ runner.os }}-${{ hashFiles('mods/*.nrm') }}
+
+    - name: Convert .nrm mods to C headers
+      if: steps.mod-cache.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p android/app/src/main/cmods
         for mod in mods/*.nrm; do
             modname=$(basename "$mod" .nrm)
             out="$GITHUB_WORKSPACE/android/app/src/main/cmods/$modname.c"
             file_to_c "$mod" "$modname" "$out" "$out.h"
         done
 
-        echo "Generating patches_bin.c..."
+    # --- Cache patches_bin.c ---
+    - name: Cache patches_bin.c
+      id: patches-cache
+      uses: actions/cache@v3
+      with:
+        path: RecompiledPatches/patches_bin.c
+        key: patches-cache-${{ runner.os }}-${{ hashFiles('patches/patches.bin') }}
+
+    - name: Generate patches_bin.c
+      if: steps.patches-cache.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p RecompiledPatches
         if [ -f patches/patches.bin ]; then
             file_to_c patches/patches.bin mm_patches_bin RecompiledPatches/patches_bin.c RecompiledPatches/patches_bin.h
         else
             echo "Warning: patches/patches.bin not found; skipping patches_bin.c"
         fi
 
+    # --- Cache Gradle build ---
+    - name: Cache Gradle build
+      uses: actions/cache@v3
+      with:
+        path: |
+          android/.gradle
+          android/build
+        key: gradle-${{ runner.os }}-v1
+
     - name: Build Android APK
       working-directory: android
-      run: |
-        ./gradlew assembleDebug --no-daemon
+      run: ./gradlew assembleDebug --no-daemon
