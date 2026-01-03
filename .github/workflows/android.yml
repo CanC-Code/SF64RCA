@@ -1,29 +1,35 @@
-name: Android Build
+name: Build Android APK
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     env:
-      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Install dependencies for image conversion if needed
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y unzip wget xz-utils lib32z1 lib32ncurses6 lib32stdc++6
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-      # Manually install CMake 3.27.3
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip ninja-build
+
+      # ---- MANUAL CMAKE INSTALL (THE IMPORTANT PART) ----
       - name: Install CMake 3.27.3
         run: |
           wget https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh
@@ -31,25 +37,29 @@ jobs:
           sudo ./cmake-3.27.3-linux-x86_64.sh --skip-license --prefix=/usr/local
           cmake --version
 
-      # Setup Android SDK, NDK, and Build tools
-      - name: Setup Android SDK & NDK
+      - name: Add CMake to PATH
+        run: echo "/usr/local/bin" >> $GITHUB_PATH
+
+      # ---- ANDROID SDK / NDK ----
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           api-level: 34
           build-tools: 34.0.0
           ndk: 25.1.8937393
-          cmake: ""  # Leave empty, we installed manually
 
-      # Set PATH to include manual CMake
-      - name: Add CMake to PATH
-        run: echo "/usr/local/bin" >> $GITHUB_PATH
+      # ---- GRADLE PERMISSIONS ----
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
 
-      # Prepare resources if needed
-      - name: Prepare resources
-        run: |
-          mkdir -p android/app/src/main/assets
-          cp -r assets/* android/app/src/main/assets/
-
-      # Build APK
-      - name: Build Debug APK
+      # ---- BUILD (NOTE THE WORKING DIRECTORY) ----
+      - name: Assemble Debug APK
+        working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # ---- UPLOAD APK ----
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Starfox64RCA-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
