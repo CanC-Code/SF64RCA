@@ -30,14 +30,39 @@ jobs:
           sdkmanager \
             "platforms;android-34" \
             "build-tools;34.0.0" \
-            "ndk;26.2.11394342" \
-            "cmake;3.27.3"
+            "ndk;26.2.11394342"
+
+      - name: Download and install CMake 3.27.3
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.sh \
+            -o $GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64/cmake.sh
+          chmod +x $GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64/cmake.sh
+          $GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64/cmake.sh --skip-license --prefix=$GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64
+
+      - name: Populate Android assets
+        run: |
+          ASSETS_DIR=Android/app/src/main/assets
+          mkdir -p $ASSETS_DIR
+
+          # Copy main runtime assets
+          rsync -a --delete assets/ $ASSETS_DIR/
+          rsync -a mods/ $ASSETS_DIR/mods/
+          rsync -a patches/ $ASSETS_DIR/patches/
+          rsync -a icons/ $ASSETS_DIR/icons/
+          rsync -a shaders/ $ASSETS_DIR/shaders/
+
+          # Any additional directories needed at runtime can be added similarly
 
       - name: Make Gradle wrapper executable
         run: chmod +x Android/gradlew
 
       - name: Build debug APK
         working-directory: Android
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+          CMAKE_HOME: $GITHUB_WORKSPACE/cmake-3.27.3-linux-x86_64
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload debug APK
