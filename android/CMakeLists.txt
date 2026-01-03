@@ -117,6 +117,7 @@ file(GLOB_RECURSE GAME_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/main/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/game/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/ui/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/platform/android/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../rsp/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Backends/*.cpp
 )
