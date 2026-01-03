@@ -39,7 +39,6 @@ jobs:
         build-tools: 34.0.0
         ndk: 25.2.9519653
         cmake: 3.22.1
-        accept-licenses: true
 
     # --- Make gradlew executable ---
     - name: Make gradlew executable
@@ -95,7 +94,7 @@ jobs:
           done
         fi
 
-    # --- Generate mod headers dynamically ---
+    # --- Generate mod headers ---
     - name: Generate mod headers dynamically
       run: |
         mkdir -p android/app/src/main/cmods
@@ -131,15 +130,26 @@ jobs:
       working-directory: android
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-    # --- Verify APK exists ---
+    # --- Verify APK installation readiness ---
     - name: Verify APK
       run: |
         APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk
         if [ ! -f "$APK_PATH" ]; then
-          echo "APK not found! Build failed." 
+          echo "APK not found! Build failed."
           exit 1
         else
           echo "APK found: $APK_PATH"
+        fi
+
+        # Verify APK signature (ensures installable)
+        echo "Verifying APK signature..."
+        $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK_PATH"
+
+        if [ $? -eq 0 ]; then
+          echo "APK verification passed. APK is installable."
+        else
+          echo "APK verification failed!"
+          exit 1
         fi
 
     # --- Upload APK artifact ---
@@ -148,3 +158,4 @@ jobs:
       with:
         name: SF64RCA-debug-apk
         path: android/app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: error
