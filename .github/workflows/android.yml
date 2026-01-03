@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # ---------- Checkout ----------
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
@@ -21,17 +22,20 @@ jobs:
     - name: Initialize submodules
       run: git submodule update --init --recursive
 
+    # ---------- System Dependencies ----------
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake git unzip wget gcc imagemagick
 
+    # ---------- JDK ----------
     - name: Setup JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: temurin
         java-version: 17
 
+    # ---------- Android SDK ----------
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       with:
@@ -40,6 +44,7 @@ jobs:
         ndk: 25.2.9519653
         cmake: 3.22.1
 
+    # ---------- Gradle ----------
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
@@ -49,31 +54,79 @@ jobs:
         cat > /tmp/file_to_c.c << 'EOF'
         #include <stdio.h>
         #include <stdlib.h>
+        #include <string.h>
         int main(int argc,char**argv){
-          if(argc!=5)return 1;
-          FILE*i=fopen(argv[1],"rb"); if(!i)return 1;
-          FILE*c=fopen(argv[3],"w"); FILE*h=fopen(argv[4],"w");
-          fseek(i,0,SEEK_END); long s=ftell(i); fseek(i,0,SEEK_SET);
-          fprintf(h,"extern const unsigned char %s[];\nextern const unsigned int %s_size;\n",argv[2],argv[2]);
-          fprintf(c,"const unsigned char %s[]={",argv[2]);
-          for(long j=0;j<s;j++){fprintf(c,"0x%02x,",fgetc(i));}
-          fprintf(c,"};\nconst unsigned int %s_size=%ld;",argv[2],s);
+            if(argc!=5){fprintf(stderr,"Usage: %s <input> <symbol> <cfile> <hfile>\n",argv[0]); return 1;}
+            const char *infile=argv[1],*sym=argv[2],*cfile=argv[3],*hfile=argv[4];
+            FILE *i=fopen(infile,"rb"); if(!i){fprintf(stderr,"Cannot open %s\n",infile); return 1;}
+            fseek(i,0,SEEK_END); long size=ftell(i); fseek(i,0,SEEK_SET);
+            FILE *h=fopen(hfile,"w"); if(!h){fclose(i); fprintf(stderr,"Cannot create %s\n",hfile); return 1;}
+            fprintf(h,"#ifndef %s_H\n#define %s_H\n\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n\n#endif\n",sym,sym,sym,sym); fclose(h);
+            FILE *c=fopen(cfile,"w"); if(!c){fclose(i); fprintf(stderr,"Cannot create %s\n",cfile); return 1;}
+            fprintf(c,"#include \"%s\"\n\nconst unsigned char %s[] = {\n",strrchr(hfile,'/')?strrchr(hfile,'/')+1:hfile,sym);
+            unsigned char b; long count=0; while(fread(&b,1,1,i)==1){if(count%16==0)fprintf(c,"    "); fprintf(c,"0x%02x",b); count++; if(count<size){fprintf(c,","); if(count%16==0)fprintf(c,"\n"); else fprintf(c," ");}}
+            fprintf(c,"\n};\n\nconst unsigned int %s_size = %ld;\n",sym,size);
+            fclose(i); fclose(c); return 0;
         }
         EOF
         gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
         chmod +x /usr/local/bin/file_to_c
 
-    # ---------- Assets ----------
+    # ---------- Launcher Icons ----------
+    - name: Prepare Android launcher icons
+      run: |
+        mkdir -p android/app/src/main/res/mipmap-mdpi
+        mkdir -p android/app/src/main/res/mipmap-hdpi
+        mkdir -p android/app/src/main/res/mipmap-xhdpi
+        mkdir -p android/app/src/main/res/mipmap-xxhdpi
+        mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+
+        convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+        convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+        convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+        convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+        convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+    # ---------- Copy Assets ----------
     - name: Copy assets
       run: |
         rm -rf android/app/src/main/assets
         cp -R assets android/app/src/main/
 
-    # ---------- Build ----------
-    - name: Build Android APK (FAIL FAST)
-      working-directory: android
+    # ---------- Dynamic Shaders ----------
+    - name: Generate shader headers dynamically
       run: |
-        ./gradlew assembleDebug --no-daemon --stacktrace --info
+        mkdir -p android/app/src/main/cshaders
+        if ls shaders/*.hlsl 1> /dev/null 2>&1; then
+          for f in shaders/*.hlsl; do
+            base=$(basename "$f" .hlsl)
+            file_to_c "$f" "shader_${base}" "android/app/src/main/cshaders/${base}.c" "android/app/src/main/cshaders/${base}.h"
+          done
+        fi
+
+    # ---------- Dynamic Mods ----------
+    - name: Generate mod headers dynamically
+      run: |
+        mkdir -p android/app/src/main/cmods
+        if ls mods/*.nrm 1> /dev/null 2>&1; then
+          for f in mods/*.nrm; do
+            base=$(basename "$f" .nrm)
+            file_to_c "$f" "$base" "android/app/src/main/cmods/${base}.c" "android/app/src/main/cmods/${base}.h"
+          done
+        fi
+
+    # ---------- Dynamic Patches ----------
+    - name: Generate patches_bin.c dynamically
+      run: |
+        mkdir -p android/app/src/main/cpatches
+        if [ -f patches/patches.bin ]; then
+          file_to_c patches/patches.bin mm_patches_bin android/app/src/main/cpatches/patches_bin.c android/app/src/main/cpatches/patches_bin.h
+        fi
+
+    # ---------- Build APK ----------
+    - name: Build Android APK
+      working-directory: android
+      run: ./gradlew assembleDebug --no-daemon --stacktrace --info
 
     # ---------- Resolve APK ----------
     - name: Resolve APK path
@@ -91,11 +144,11 @@ jobs:
     - name: APK sanity check
       run: |
         APK="${{ steps.apk.outputs.apk_path }}"
-        unzip -t "$APK" > /dev/null
+        unzip -t "$APK"
         $ANDROID_HOME/build-tools/34.0.0/aapt dump badging "$APK"
         $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK"
 
-    # ---------- Upload ----------
+    # ---------- Upload APK ----------
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
@@ -103,6 +156,7 @@ jobs:
         path: ${{ steps.apk.outputs.apk_path }}
         if-no-files-found: error
 
+    # ---------- Build summary ----------
     - name: Build summary
       run: |
         echo "## ✅ APK Built Successfully" >> $GITHUB_STEP_SUMMARY
