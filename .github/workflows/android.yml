@@ -19,9 +19,6 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Initialize submodules
-      run: git submodule update --init --recursive
-
     # ---------- System Dependencies ----------
     - name: Install system dependencies
       run: |
@@ -32,7 +29,10 @@ jobs:
           unzip \
           wget \
           gcc \
-          imagemagick
+          imagemagick \
+          cmake \
+          ninja-build \
+          default-jdk
 
     # ---------- JDK ----------
     - name: Setup JDK 17
@@ -57,17 +57,7 @@ jobs:
         echo "ndk.dir=$ANDROID_NDK_HOME" >> android/local.properties
         echo "cmake.dir=$ANDROID_HOME/cmake/3.27.3" >> android/local.properties
 
-    # ---------- Verify toolchain ----------
-    - name: Verify CMake
-      run: |
-        export PATH="$ANDROID_HOME/cmake/3.27.3/bin:$PATH"
-        cmake --version
-
-    - name: Verify NDK
-      run: |
-        ls "$ANDROID_NDK_HOME"
-
-    # ---------- Gradle permissions ----------
+    # ---------- Make gradlew executable ----------
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
@@ -122,7 +112,7 @@ jobs:
         convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
     # ---------- Assets ----------
-    - name: Copy assets
+    - name: Copy static assets
       run: |
         rm -rf android/app/src/main/assets
         mkdir -p android/app/src/main
@@ -154,7 +144,7 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Patch binary ----------
+    # ---------- Patch binary headers ----------
     - name: Generate patches_bin.c dynamically
       run: |
         mkdir -p android/app/src/main/cpatches
@@ -196,7 +186,7 @@ jobs:
         path: ${{ steps.apk.outputs.apk_path }}
         if-no-files-found: error
 
-    # ---------- Summary ----------
+    # ---------- Build summary ----------
     - name: Build summary
       run: |
         echo "## ✅ Android Build Complete" >> $GITHUB_STEP_SUMMARY
