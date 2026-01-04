@@ -1,4 +1,3 @@
-// SDL_main.cpp
 #include <SDL.h>
 #include <SDL_main.h>
 #include <android/log.h>
