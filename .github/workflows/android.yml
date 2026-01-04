@@ -55,7 +55,7 @@ jobs:
         java-version: 17
 
     # ---------- Android SDK / NDK ----------
-    - name: Setup Android SDK & NDK
+    - name: Setup Android SDK and NDK
       uses: android-actions/setup-android@v3
       with:
         accept-android-sdk-licenses: true
@@ -65,16 +65,9 @@ jobs:
           build-tools;34.0.0
           ndk;27.3.13750724
 
-    # ---------- Export Android environment variables ----------
-    - name: Export Android environment variables
-      run: |
-        echo "ANDROID_HOME=$HOME/Android/Sdk" >> $GITHUB_ENV
-        echo "ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/27.3.13750724" >> $GITHUB_ENV
-        echo "PATH=$HOME/Android/Sdk/platform-tools:$HOME/Android/Sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
-
-    # ---------- Accept SDK licenses ----------
-    - name: Accept Android SDK licenses
-      run: yes | $HOME/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+    # ---------- Accept all SDK licenses ----------
+    - name: Accept all Android SDK licenses
+      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
 
     # ---------- Install CMake ----------
     - name: Install CMake 3.27.3
@@ -87,23 +80,23 @@ jobs:
         sudo ln -sf /opt/cmake-${CMAKE_VERSION}/bin/cmake /usr/local/bin/cmake
         cmake --version
 
-    # ---------- Configure local.properties ----------
+    # ---------- local.properties ----------
     - name: Configure local.properties
       run: |
         mkdir -p android
         {
-          echo "sdk.dir=$HOME/Android/Sdk"
-          echo "ndk.dir=$HOME/Android/Sdk/ndk/27.3.13750724"
+          echo "sdk.dir=$ANDROID_HOME"
+          echo "ndk.dir=$ANDROID_NDK_HOME"
           echo "cmake.dir=/opt/cmake-3.27.3"
         } > android/local.properties
         cat android/local.properties
 
-    # ---------- Make gradlew executable ----------
+    # ---------- Gradle permissions ----------
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # ---------- Copy Android CMakeLists.txt ----------
-    - name: Copy Android CMakeLists.txt
+    # ---------- Copy CMakeLists ----------
+    - name: Copy Android CMakeLists.txt into app
       run: cp android/CMakeLists.txt android/app/CMakeLists.txt
 
     # ---------- Required directories ----------
@@ -115,7 +108,7 @@ jobs:
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
 
-    # ---------- Setup Android build structure ----------
+    # ---------- Build structure ----------
     - name: Setup Android build structure
       run: |
         if [ ! -L android/lib ]; then ln -s ../lib android/lib; fi
@@ -168,7 +161,6 @@ jobs:
         }
         EOF
         gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
-        chmod +x /usr/local/bin/file_to_c
 
     # ---------- Shaders ----------
     - name: Generate shader headers
