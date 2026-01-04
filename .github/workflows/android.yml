@@ -99,6 +99,25 @@ jobs:
           convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} android/app/src/main/res/mipmap-$dpi/ic_launcher_round.png
         done
 
+    # ---------- Patch RT64 to use existing SDL2 ----------
+    - name: Patch RT64 CMake for external SDL2
+      run: |
+        echo "Configuring RT64 to use our SDL2..."
+        RT64_CMAKE=${GITHUB_WORKSPACE}/lib/rt64/CMakeLists.txt
+        sed -i 's|find_package(SDL2 REQUIRED)|# find_package(SDL2 REQUIRED)|g' "$RT64_CMAKE"
+        sed -i 's|add_subdirectory(SDL2)|# add_subdirectory(SDL2)|g' "$RT64_CMAKE"
+
+    # ---------- Optional: Configure RT64 with CMake ----------
+    - name: Configure RT64 with CMake
+      run: |
+        mkdir -p build_rt64
+        cmake -S lib/rt64 -B build_rt64 \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DRT64_USE_EXTERNAL_SDL2=ON \
+          -DRT64_SDL2_TARGET=SDL2 \
+          -DSDL2_DIR=${GITHUB_WORKSPACE}/android/SDL2
+        cmake --build build_rt64 --target rt64 -- -j$(nproc)
+
     # ---------- Build Debug APK ----------
     - name: Build Debug APK
       working-directory: android
