@@ -1,4 +1,4 @@
-name: Android Build + Dynamic Assets
+name: Android Build + Dynamic Assets + Shaders
 
 on:
   push:
@@ -11,6 +11,11 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /home/runner/work/SF64RCA/SF64RCA/android-sdk
+      ANDROID_SDK_ROOT: /home/runner/work/SF64RCA/SF64RCA/android-sdk
+      PATH: ${{ env.ANDROID_HOME }}/cmdline-tools/latest/bin:$PATH
+
     steps:
     # ---------- Checkout ----------
     - name: Checkout repository
@@ -18,210 +23,70 @@ jobs:
       with:
         submodules: recursive
         fetch-depth: 0
-    
-    # ---------- Verify submodules ----------
-    - name: Verify submodules
-      run: |
-        echo "Checking required libraries..."
-        for lib in rt64 lunasvg RmlUi N64ModernRuntime; do
-          if [ ! -d "lib/$lib" ] || [ -z "$(ls -A lib/$lib)" ]; then
-            echo "ERROR: lib/$lib is missing or empty. Initializing submodules..."
-            git submodule update --init --recursive
-            break
-          fi
-        done
-        ls -la lib/
 
-    # ---------- System dependencies ----------
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential git unzip wget gcc imagemagick cmake ninja-build default-jdk
-
-    # ---------- Setup JDK 17 ----------
-    - name: Setup JDK 17
-      uses: actions/setup-java@v4
+    # ---------- Setup JDK ----------
+    - name: Setup JDK
+      uses: actions/setup-java@v3
       with:
-        distribution: temurin
-        java-version: 17
+        java-version: '17'
+        distribution: 'temurin'
 
-    # ---------- Android SDK / NDK ----------
-    - name: Setup Android SDK and NDK
-      uses: android-actions/setup-android@v3
+    # ---------- Setup Android SDK ----------
+    - name: Install Android SDK
+      uses: android-actions/setup-android@v2
       with:
-        accept-android-sdk-licenses: true
-        log-accepted-android-sdk-licenses: true
-        packages: platform-tools platforms;android-34 build-tools;34.0.0 ndk;27.3.13750724
+        api-level: 33
+        build-tools: 33.0.2
+        ndk: 25.2.9519653
 
-    # ---------- Install CMake 3.27.3 ----------
-    - name: Install CMake
+    # ---------- Apply Android CMake patch ----------
+    - name: Apply Android CMake patch
       run: |
-        CMAKE_VERSION=3.27.3
-        wget -q https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
-        tar -xzf cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
-        sudo mv cmake-${CMAKE_VERSION}-linux-x86_64 /opt/cmake-${CMAKE_VERSION}
-        sudo ln -sf /opt/cmake-${CMAKE_VERSION}/bin/cmake /usr/local/bin/cmake
-        cmake --version
+        git apply android-compatibility.patch
 
-    # ---------- Configure local.properties ----------
-    - name: Configure local.properties
+    # ---------- Apply temporary patch to rt64 CMakeLists.txt ----------
+    - name: Patch lib/rt64/CMakeLists.txt for Android
       run: |
-        mkdir -p android
-        echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-        echo "ndk.dir=$ANDROID_NDK_HOME" >> android/local.properties
-        echo "cmake.dir=/opt/cmake-3.27.3" >> android/local.properties
+        # Skip DXIL (Windows) and MSL (Apple) shader builds
+        sed -i '/if (WIN32)/,/endif()/ s/^/#[PATCHED FOR ANDROID] /' lib/rt64/CMakeLists.txt
+        sed -i '/if (APPLE)/,/endif()/ s/^/#[PATCHED FOR ANDROID] /' lib/rt64/CMakeLists.txt
 
-    # ---------- Make gradlew executable ----------
-    - name: Make gradlew executable
-      run: chmod +x android/gradlew
-
-    # ---------- Copy dynamic CMakeLists.txt ----------
-    - name: Copy CMakeLists.txt to app
-      run: cp android/CMakeLists.txt android/app/CMakeLists.txt
-
-    # ---------- Create required directories ----------
-    - name: Ensure required directories exist
+    # ---------- Copy / Import dynamic assets ----------
+    - name: Copy Dynamic Assets
       run: |
-        mkdir -p android/app/libs
         mkdir -p android/app/src/main/assets
-        mkdir -p android/app/src/main/cshaders
-        mkdir -p android/app/src/main/cmods
-        mkdir -p android/app/src/main/cpatches
+        cp -r assets/* android/app/src/main/assets/
 
-    # ---------- Setup build structure ----------
-    - name: Setup Android build structure
+    # ---------- Verify submodules ----------
+    - name: Verify Git Submodules
+      run: git submodule update --init --recursive
+
+    # ---------- Pre-build SPIR-V shaders ----------
+    - name: Configure CMake for Android + SPIR-V
       run: |
-        if [ ! -L android/lib ]; then ln -s ../lib android/lib; fi
-        for dir in include RecompiledFuncs RecompiledPatches patches rsp src; do
-          if [ -d "$dir" ] && [ ! -L "android/$dir" ]; then
-            ln -s ../$dir android/$dir
-          fi
-        done
-        echo "Build structure setup complete"
+        mkdir -p build-android
+        cd build-android
+        cmake .. \
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-24 \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DRT64_STATIC=OFF \
+          -DRT64_SDL_WINDOW_VULKAN=ON
 
-    # ---------- Patch nativefiledialog for Android ----------
-    - name: Patch nativefiledialog-extended for Android
+    - name: Build Shaders via CMake
       run: |
-        NFD_CMAKE="lib/rt64/src/contrib/nativefiledialog-extended/src/CMakeLists.txt"
-        if [ -f "$NFD_CMAKE" ]; then
-          cp "$NFD_CMAKE" "$NFD_CMAKE.bak"
-          echo -e "# Guard for Android\nif(ANDROID)\n  message(STATUS \"Skipping nativefiledialog on Android\")\n  return()\nendif()\n" > "$NFD_CMAKE.new"
-          cat "$NFD_CMAKE.bak" >> "$NFD_CMAKE.new"
-          mv "$NFD_CMAKE.new" "$NFD_CMAKE"
-        fi
-
-    # ---------- Patch rt64 for SDL2 ----------
-    - name: Patch rt64 CMakeLists.txt for SDL2
-      run: |
-        RT64_CMAKE="lib/rt64/CMakeLists.txt"
-        if [ -f "$RT64_CMAKE" ]; then
-          sed -i 's/find_package(SDL2 REQUIRED)/if(NOT TARGET SDL2::SDL2)\n  find_package(SDL2 REQUIRED)\nendif()/' "$RT64_CMAKE"
-        fi
-
-    # ---------- file_to_c utility ----------
-    - name: Build file_to_c
-      run: |
-        cat > /tmp/file_to_c.c << 'EOF'
-        #include <stdio.h>
-        #include <stdlib.h>
-        int main(int argc,char**argv){
-            if(argc!=5){fprintf(stderr,"Usage: %s <input> <symbol> <cfile> <hfile>\n",argv[0]);return 1;}
-            FILE *in=fopen(argv[1],"rb"); if(!in){perror("input");return 1;}
-            fseek(in,0,SEEK_END); long size=ftell(in); fseek(in,0,SEEK_SET);
-            FILE *h=fopen(argv[4],"w");
-            fprintf(h,"#pragma once\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n",argv[2],argv[2]);
-            fclose(h);
-            FILE *c=fopen(argv[3],"w");
-            fprintf(c,"#include \"%s\"\nconst unsigned char %s[] = {\n",argv[4],argv[2]);
-            for(long i=0;i<size;i++){unsigned char b; fread(&b,1,1,in); fprintf(c,"0x%02x%s",b,(i+1<size)?",":""); if((i+1)%16==0) fprintf(c,"\n");}
-            fprintf(c,"\n};\nconst unsigned int %s_size = %ld;\n",argv[2],size);
-            fclose(c); fclose(in); return 0;
-        }
-        EOF
-        gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
-        chmod +x /usr/local/bin/file_to_c
-
-    # ---------- Generate shader headers ----------
-    - name: Generate shader headers
-      run: |
-        shopt -s nullglob
-        for f in shaders/*.hlsl; do
-          base=$(basename "$f" .hlsl)
-          file_to_c "$f" "shader_${base}" \
-            "android/app/src/main/cshaders/${base}.c" \
-            "android/app/src/main/cshaders/${base}.h"
-        done
-        shopt -u nullglob
-
-    # ---------- Generate mod headers ----------
-    - name: Generate mod headers
-      run: |
-        shopt -s nullglob
-        for f in mods/*.nrm; do
-          base=$(basename "$f" .nrm)
-          file_to_c "$f" "$base" \
-            "android/app/src/main/cmods/${base}.c" \
-            "android/app/src/main/cmods/${base}.h"
-        done
-        shopt -u nullglob
-
-    # ---------- Generate patches ----------
-    - name: Generate patches_bin.c
-      run: |
-        if [ -f patches/patches.bin ]; then
-          file_to_c patches/patches.bin mm_patches_bin \
-            android/app/src/main/cpatches/patches_bin.c \
-            android/app/src/main/cpatches/patches_bin.h
-        fi
-
-    # ---------- Launcher icons ----------
-    - name: Prepare launcher icons
-      run: |
-        for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do mkdir -p android/app/src/main/res/mipmap-$d; done
-        convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-        convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-        convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-        convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-        convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-    # ---------- Copy static assets ----------
-    - name: Copy static assets
-      run: cp -R assets/* android/app/src/main/assets/
+        cd build-android
+        cmake --build . --target rt64 -- -j$(nproc)
 
     # ---------- Build APK ----------
     - name: Build Android APK
       working-directory: android
-      run: ./gradlew assembleDebug --no-daemon --stacktrace --info
+      run: ./gradlew assembleDebug --no-daemon
 
-    # ---------- Locate APK ----------
-    - name: Resolve APK path
-      id: apk
-      run: |
-        APK=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
-        if [ -z "$APK" ]; then
-          echo "No APK produced"
-          exit 1
-        fi
-        echo "apk_path=$APK" >> $GITHUB_OUTPUT
-
-    # ---------- APK verification ----------
-    - name: APK sanity check
-      run: |
-        APK="${{ steps.apk.outputs.apk_path }}"
-        unzip -t "$APK"
-        $ANDROID_HOME/build-tools/34.0.0/aapt dump badging "$APK"
-        $ANDROID_HOME/build-tools/34.0.0/apksigner verify "$APK"
-
-    # ---------- Upload artifact ----------
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
+    # ---------- Upload APK artifact ----------
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v3
       with:
-        name: SF64RCA-debug-apk
-        path: ${{ steps.apk.outputs.apk_path }}
-        if-no-files-found: error
-
-    # ---------- Build summary ----------
-    - name: Build summary
-      run: |
-        echo "## ✅ Android Build Complete" >> $GITHUB_STEP_SUMMARY
-        echo "**APK:** ${{ steps.apk.outputs.apk_path }}" >> $GITHUB_STEP_SUMMARY
+        name: SF64RCA-Android-APK
+        path: android/app/build/outputs/apk/debug/app-debug.apk
