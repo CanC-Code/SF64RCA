@@ -112,9 +112,12 @@ jobs:
         # Disable NativeFileDialog subdir to avoid GTK dependency
         sed -i 's|add_subdirectory(src/contrib/nativefiledialog-extended)|# add_subdirectory(src/contrib/nativefiledialog-extended)|g' "$RT64_CMAKE"
 
-        # Comment out include_directories calls that may be empty
+        # Comment out SDL2 and NFD includes (may be empty)
         sed -i 's|include_directories(${SDL2_INCLUDE_DIRS})|# include_directories(${SDL2_INCLUDE_DIRS})|g' "$RT64_CMAKE"
         sed -i 's|include_directories(${NFD_INCLUDE_DIR})|# include_directories(${NFD_INCLUDE_DIR})|g' "$RT64_CMAKE"
+
+        # Comment out any other empty include_directories to prevent build failure
+        sed -i '/include_directories(\${.*_INCLUDE_DIRS?})/s/^/# /' "$RT64_CMAKE"
 
     # ---------- Configure and Build RT64 ----------
     - name: Configure and Build RT64
