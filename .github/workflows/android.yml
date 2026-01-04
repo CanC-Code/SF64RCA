@@ -103,16 +103,8 @@ jobs:
       run: chmod +x android/gradlew
 
     # ---------- Copy Android CMakeLists.txt ----------
-    - name: Copy CMakeLists.txt into app/
-      run: |
-        mkdir -p android/app
-        if [ -f android/CMakeLists.txt ]; then
-          cp android/CMakeLists.txt android/app/CMakeLists.txt
-          echo "✓ CMakeLists.txt copied into android/app/"
-        else
-          echo "ERROR: android/CMakeLists.txt not found"
-          exit 1
-        fi
+    - name: Copy Android CMakeLists.txt
+      run: cp android/CMakeLists.txt android/app/CMakeLists.txt
 
     # ---------- Required directories ----------
     - name: Ensure Android directories exist
@@ -123,7 +115,7 @@ jobs:
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
 
-    # ---------- Build structure ----------
+    # ---------- Setup Android build structure ----------
     - name: Setup Android build structure
       run: |
         if [ ! -L android/lib ]; then ln -s ../lib android/lib; fi
