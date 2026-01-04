@@ -10,14 +10,10 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/27.3.13750724
 
     steps:
     # ---------- Checkout ----------
-    - name: Checkout repository
+    - name: Checkout repository (with submodules)
       uses: actions/checkout@v4
       with:
         submodules: recursive
@@ -38,6 +34,21 @@ jobs:
         ndk-version: 27.3.13750724
         components: build-tools;34.0.0,platforms;android-34
 
+    # ---------- Verify SDL2 submodule ----------
+    - name: Verify SDL2 submodule
+      run: |
+        echo "Verifying SDL2 submodule..."
+        git submodule status
+
+        if [ ! -f "android/SDL2/CMakeLists.txt" ]; then
+          echo "✗ SDL2 submodule missing or not initialized"
+          echo "Contents of android/:"
+          ls -la android || true
+          exit 1
+        fi
+
+        echo "✓ SDL2 submodule present and valid"
+
     # ---------- Install ImageMagick ----------
     - name: Install ImageMagick
       run: sudo apt-get update && sudo apt-get install -y imagemagick
@@ -54,9 +65,9 @@ jobs:
         for f in assets/*.nrm; do
           [ -f "$f" ] || continue
           BASENAME=$(basename "$f" .nrm | tr -c 'a-zA-Z0-9_' '_')
-          OUT_C=android/app/src/main/cmods/${BASENAME}.c
-          OUT_H=android/app/src/main/cmods/${BASENAME}.h
-          ./file_to_c "$f" "$BASENAME" "$OUT_C" "$OUT_H" || echo "Warning: failed to convert $f"
+          ./file_to_c "$f" "$BASENAME" \
+            android/app/src/main/cmods/${BASENAME}.c \
+            android/app/src/main/cmods/${BASENAME}.h
         done
 
     # ---------- Convert Images, Fonts, SVGs ----------
@@ -66,12 +77,11 @@ jobs:
         mkdir -p android/app/src/main/cassets
         shopt -s globstar nullglob
         for f in assets/**/*.{png,jpg,jpeg,svg,ttf,otf}; do
-          [ -f "$f" ] || continue
           BASENAME=$(basename "$f" | tr -c 'a-zA-Z0-9_' '_')
           BASENAME="${BASENAME%.*}"
-          OUT_C=android/app/src/main/cassets/${BASENAME}.c
-          OUT_H=android/app/src/main/cassets/${BASENAME}.h
-          ./file_to_c "$f" "$BASENAME" "$OUT_C" "$OUT_H" || echo "Warning: failed to convert $f"
+          ./file_to_c "$f" "$BASENAME" \
+            android/app/src/main/cassets/${BASENAME}.c \
+            android/app/src/main/cassets/${BASENAME}.h
         done
 
     # ---------- Copy shaders ----------
@@ -89,80 +99,38 @@ jobs:
     # ---------- Generate launcher icons ----------
     - name: Generate launcher icons
       run: |
-        echo "Generating Android launcher icons..."
         ICON_SRC=icons/512.png
-        declare -A SIZES
-        SIZES=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
+        declare -A SIZES=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
         for dpi in "${!SIZES[@]}"; do
           mkdir -p android/app/src/main/res/mipmap-$dpi
-          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} android/app/src/main/res/mipmap-$dpi/ic_launcher.png
-          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} android/app/src/main/res/mipmap-$dpi/ic_launcher_round.png
+          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} \
+            android/app/src/main/res/mipmap-$dpi/ic_launcher.png
+          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} \
+            android/app/src/main/res/mipmap-$dpi/ic_launcher_round.png
         done
 
     # ---------- Patch RT64 CMakeLists for Android ----------
     - name: Patch RT64 CMakeLists for Android
       run: |
-        echo "Patching RT64 CMakeLists.txt for Android build..."
-        RT64_CMAKE=${GITHUB_WORKSPACE}/lib/rt64/CMakeLists.txt
-        
-        # Create backup
+        RT64_CMAKE=lib/rt64/CMakeLists.txt
         cp "$RT64_CMAKE" "$RT64_CMAKE.backup"
-        
-        # Comment out find_package(SDL2) - we build it as subdirectory
+
         sed -i 's/^[[:space:]]*find_package(SDL2 REQUIRED)/# &/' "$RT64_CMAKE"
-        
-        # Comment out SDL2 add_subdirectory if it tries to add it conditionally
-        sed -i 's/^[[:space:]]*add_subdirectory(SDL2)/# &/' "$RT64_CMAKE"
         sed -i 's/^[[:space:]]*add_subdirectory(.*SDL.*)/# &/' "$RT64_CMAKE"
-        
-        # Disable NativeFileDialog entirely
-        sed -i 's/^[[:space:]]*add_subdirectory(src\/contrib\/nativefiledialog-extended)/# &/' "$RT64_CMAKE"
         sed -i 's/^[[:space:]]*add_subdirectory(.*nativefiledialog.*)/# &/' "$RT64_CMAKE"
-        
-        # Comment out any include_directories that might have empty variables
-        # This is the key fix for the "empty-string as include directory" error
-        sed -i '/^[[:space:]]*include_directories([[:space:]]*\${SDL2_INCLUDE_DIR/s/^/# /' "$RT64_CMAKE"
-        sed -i '/^[[:space:]]*include_directories([[:space:]]*\${SDL2_INCLUDE_DIRS/s/^/# /' "$RT64_CMAKE"
-        sed -i '/^[[:space:]]*include_directories([[:space:]]*\${NFD_INCLUDE_DIR/s/^/# /' "$RT64_CMAKE"
-        
-        # Also handle target_include_directories with potentially empty vars
-        sed -i '/target_include_directories.*\${SDL2_INCLUDE_DIR[S]*}/s/^/# /' "$RT64_CMAKE"
-        sed -i '/target_include_directories.*\${NFD_INCLUDE_DIR}/s/^/# /' "$RT64_CMAKE"
-        
-        # Disable any target_link_libraries that reference NFD
-        sed -i '/target_link_libraries.*nfd/s/^/# /' "$RT64_CMAKE"
+
+        sed -i '/include_directories.*SDL2/s/^/# /' "$RT64_CMAKE"
+        sed -i '/include_directories.*NFD/s/^/# /' "$RT64_CMAKE"
+        sed -i '/target_include_directories.*SDL2/s/^/# /' "$RT64_CMAKE"
+        sed -i '/target_include_directories.*NFD/s/^/# /' "$RT64_CMAKE"
         sed -i '/target_link_libraries.*NFD/s/^/# /' "$RT64_CMAKE"
-        
-        echo "RT64 CMakeLists.txt patched successfully"
-        
-        # Show what changed (for debugging)
-        echo "=== Changes made to RT64 CMakeLists.txt ==="
+
         diff -u "$RT64_CMAKE.backup" "$RT64_CMAKE" || true
 
-    # ---------- Verify SDL2 exists ----------
-    - name: Verify SDL2 directory
-      run: |
-        echo "Checking SDL2 directory..."
-        if [ -d "android/SDL2" ]; then
-          echo "✓ SDL2 directory exists"
-          ls -la android/SDL2/
-          if [ -f "android/SDL2/CMakeLists.txt" ]; then
-            echo "✓ SDL2 CMakeLists.txt found"
-          else
-            echo "✗ SDL2 CMakeLists.txt NOT found"
-            exit 1
-          fi
-        else
-          echo "✗ SDL2 directory NOT found"
-          exit 1
-        fi
-
-    # ---------- Build APK (Gradle handles CMake) ----------
+    # ---------- Build APK ----------
     - name: Build Debug APK
       working-directory: android
-      run: |
-        echo "Building APK with Gradle..."
-        ./gradlew assembleDebug --no-daemon --stacktrace --info
+      run: ./gradlew assembleDebug --no-daemon --stacktrace
 
     # ---------- Run lint ----------
     - name: Run Android lint
@@ -170,7 +138,7 @@ jobs:
       continue-on-error: true
       run: ./gradlew lintDebug --no-daemon
 
-    # ---------- Upload APK artifact ----------
+    # ---------- Upload APK ----------
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
