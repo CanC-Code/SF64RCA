@@ -17,10 +17,11 @@ jobs:
       JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
       JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
       ANDROID_ABI: arm64-v8a
+      ANDROID_PLATFORM: android-34
 
     steps:
     # ------------------------------------------------------------
-    # Checkout repository + submodules
+    # Checkout repository with submodules
     # ------------------------------------------------------------
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -29,7 +30,7 @@ jobs:
         fetch-depth: 0
 
     # ------------------------------------------------------------
-    # Setup JDK 17
+    # Set up JDK 17
     # ------------------------------------------------------------
     - name: Set up JDK 17
       uses: actions/setup-java@v3
@@ -48,18 +49,22 @@ jobs:
         components: build-tools;34.0.0,platforms;android-34
 
     # ------------------------------------------------------------
-    # Verify SDL2 submodule
+    # Verify SDL2 and FreeType submodules
     # ------------------------------------------------------------
-    - name: Verify SDL2 submodule
+    - name: Verify SDL2 & FreeType submodules
       run: |
         if [ ! -f "android/SDL2/CMakeLists.txt" ]; then
           echo "SDL2 submodule missing or not initialized"
           exit 1
         fi
-        echo "SDL2 submodule OK"
+        if [ ! -f "android/FreeType/CMakeLists.txt" ]; then
+          echo "FreeType submodule missing or not initialized"
+          exit 1
+        fi
+        echo "SDL2 & FreeType submodules OK"
 
     # ------------------------------------------------------------
-    # Install system tools
+    # System tools
     # ------------------------------------------------------------
     - name: Install ImageMagick
       run: sudo apt-get update && sudo apt-get install -y imagemagick
@@ -138,68 +143,66 @@ jobs:
         diff -u "$RT64.bak" "$RT64" || true
 
     # ------------------------------------------------------------
-    # Patch RmlUi CMakeLists for Android (idempotent)
+    # Patch RmlUi CMakeLists for Android (SDL_GL3 + FreeType)
     # ------------------------------------------------------------
     - name: Patch RmlUi CMakeLists for Android
       run: |
         RMLUI_CMAKE=android/RmlUi/CMakeLists.txt
         cp "$RMLUI_CMAKE" "$RMLUI_CMAKE.bak"
 
-        awk '!/# --- Android-specific configuration ---/ {print}
-        /^project\(.*\)/ {
-          print "# --- Android-specific configuration ---"
-          print "set(RMLUI_BACKEND SDL_GL3 CACHE STRING \"Force backend for Android\" FORCE)"
-          print "if(ANDROID)"
-          print "    message(STATUS \"Configuring RmlUi for Android build...\")"
-          print "    set(BUILD_SHARED_LIBS OFF CACHE BOOL \"Static libs for Android\" FORCE)"
-          print "    set(RMLUI_SAMPLES OFF CACHE BOOL \"\" FORCE)"
-          print "    set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)"
-          print "    set(RMLUI_SHELL OFF CACHE BOOL \"\" FORCE)"
-          print "    set(RMLUI_LUA_BINDINGS OFF CACHE BOOL \"\" FORCE)"
-          print "    set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL \"\" FORCE)"
-          print "    set(RMLUI_SVG_PLUGIN OFF CACHE BOOL \"\" FORCE)"
-          print "    set(RMLUI_HARFBUZZ_SAMPLE OFF CACHE BOOL \"\" FORCE)"
-          print "    set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -DANDROID -fexceptions -frtti\")"
-          print "    set(CMAKE_C_FLAGS \"${CMAKE_C_FLAGS} -DANDROID\")"
-          print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cmods\")"
-          print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cassets\")"
-          print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cshaders\")"
-          print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cpatches\")"
-          print "    if(NOT ANDROID_ABI)"
-          print "        set(ANDROID_ABI \"arm64-v8a\" CACHE STRING \"Android ABI to build for\" FORCE)"
-          print "    endif()"
-          print "    if(NOT ANDROID_PLATFORM)"
-          print "        set(ANDROID_PLATFORM 34 CACHE STRING \"Android API level\" FORCE)"
-          print "    endif()"
-          print "endif()"
-          print "# --- End Android-specific configuration ---"
-        }' "$RMLUI_CMAKE.bak" > "$RMLUI_CMAKE"
+        awk -v FTROOT="android/FreeType" '
+          {print}
+          /^project\(.*\)/ {
+            print "# --- Android-specific configuration ---"
+            print "set(RMLUI_BACKEND SDL_GL3 CACHE STRING \"Force backend for Android\" FORCE)"
+            print "if(ANDROID)"
+            print "    message(STATUS \"Configuring RmlUi for Android build...\")"
+            print ""
+            print "    # Force static libraries for Android"
+            print "    set(BUILD_SHARED_LIBS OFF CACHE BOOL \"Static libs for Android\" FORCE)"
+            print ""
+            print "    # Disable samples, tests, shell, optional plugins"
+            print "    set(RMLUI_SAMPLES OFF CACHE BOOL \"\" FORCE)"
+            print "    set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)"
+            print "    set(RMLUI_SHELL OFF CACHE BOOL \"\" FORCE)"
+            print "    set(RMLUI_LUA_BINDINGS OFF CACHE BOOL \"\" FORCE)"
+            print "    set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL \"\" FORCE)"
+            print "    set(RMLUI_SVG_PLUGIN OFF CACHE BOOL \"\" FORCE)"
+            print "    set(RMLUI_HARFBUZZ_SAMPLE OFF CACHE BOOL \"\" FORCE)"
+            print ""
+            print "    # Android-specific compiler flags"
+            print "    set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -DANDROID -fexceptions -frtti\")"
+            print "    set(CMAKE_C_FLAGS \"${CMAKE_C_FLAGS} -DANDROID\")"
+            print ""
+            print "    # Include converted assets"
+            print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cmods\")"
+            print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cassets\")"
+            print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cshaders\")"
+            print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cpatches\")"
+            print ""
+            print "    # FreeType submodule for RmlUi"
+            print "    set(FREETYPE_ROOT \"" FTROOT "\" CACHE PATH \"FreeType root for Android\" FORCE)"
+            print ""
+            print "    # Force ABI/toolchain if missing"
+            print "    if(NOT ANDROID_ABI)"
+            print "        set(ANDROID_ABI \"arm64-v8a\" CACHE STRING \"Android ABI to build for\" FORCE)"
+            print "    endif()"
+            print "    if(NOT ANDROID_PLATFORM)"
+            print "        set(ANDROID_PLATFORM 34 CACHE STRING \"Android API level\" FORCE)"
+            print "    endif()"
+            print "endif()"
+            print "# --- End Android-specific configuration ---"
+          }
+        ' "$RMLUI_CMAKE.bak" > "$RMLUI_CMAKE"
 
         diff -u "$RMLUI_CMAKE.bak" "$RMLUI_CMAKE" || true
 
     # ------------------------------------------------------------
-    # Pre-build RmlUi (optional)
-    # ------------------------------------------------------------
-    - name: Pre-build RmlUi for Android
-      working-directory: android/RmlUi
-      run: |
-        mkdir -p build
-        cd build
-        cmake .. \
-          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-          -DANDROID_ABI=$ANDROID_ABI \
-          -DANDROID_PLATFORM=android-24 \
-          -DANDROID_STL=c++_static \
-          -DANDROID_TOOLCHAIN=clang \
-          -DRMLUI_BACKEND=SDL_GL3
-        cmake --build . --config Release
-
-    # ------------------------------------------------------------
-    # Build Debug APK via Gradle
+    # Build Debug APK
     # ------------------------------------------------------------
     - name: Build Debug APK
       working-directory: android
-      run: ./gradlew clean assembleDebug --no-daemon --stacktrace
+      run: ./gradlew assembleDebug --no-daemon --stacktrace
 
     # ------------------------------------------------------------
     # Lint (non-fatal)
