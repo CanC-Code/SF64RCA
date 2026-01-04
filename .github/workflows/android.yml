@@ -18,7 +18,7 @@ jobs:
       with:
         submodules: recursive
         fetch-depth: 0
-    
+
     # ---------- Verify submodules ----------
     - name: Verify submodules are initialized
       run: |
@@ -94,55 +94,31 @@ jobs:
         mkdir -p android/app/src/main/cshaders
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
+        mkdir -p android/app/src/main/cpp
 
     # ---------- Setup Android build structure ----------
     - name: Setup Android build structure
       run: |
-        # Verify CMakeLists.txt location
-        if [ -f android/app/CMakeLists.txt ]; then
-          echo "✓ CMakeLists.txt found in android/app/"
-        elif [ -f android/CMakeLists.txt ]; then
-          echo "Copying CMakeLists.txt from android/ to android/app/"
-          cp android/CMakeLists.txt android/app/
-        else
-          echo "ERROR: CMakeLists.txt not found in android/ directory"
-          ls -la android/
-          exit 1
-        fi
-        
-        # Create symlinks to lib directories that CMake needs
-        if [ ! -L android/lib ]; then
-          echo "Creating symlink: android/lib -> ../lib"
-          ln -s ../lib android/lib
-        fi
-        
-        # Verify the lib directories are accessible
-        echo "Verifying library access from android/app/:"
-        ls -la android/lib/ || echo "WARNING: android/lib symlink may not be working"
-        
-        # Also create symlinks for other directories that might be needed
-        for dir in include RecompiledFuncs RecompiledPatches patches rsp src; do
-          if [ -d "$dir" ] && [ ! -L "android/$dir" ]; then
-            echo "Creating symlink: android/$dir -> ../$dir"
-            ln -s ../$dir android/$dir
-          fi
-        done
-        
-        echo "Build structure setup complete"
+        # Symlinks from android/app to repo sources
+        cd android/app
+        ln -sf ../../lib lib
+        ln -sf ../../include include
+        ln -sf ../../patches patches
+        ln -sf ../../src src
+        ln -sf ../../rsp rsp
+
+        # Symlink main platform/android sources into cpp
+        ln -sf ../../src/main/*.cpp cpp/
+        ln -sf ../../src/platform/android/* cpp/
+
+        echo "✓ Build structure setup complete"
 
     # ---------- Patch nativefiledialog for Android ----------
     - name: Patch nativefiledialog-extended for Android
       run: |
         NFD_CMAKE="lib/rt64/src/contrib/nativefiledialog-extended/src/CMakeLists.txt"
-        
         if [ -f "$NFD_CMAKE" ]; then
-          echo "Found nativefiledialog CMakeLists.txt"
-          echo "Patching to skip on Android..."
-          
-          # Create backup
           cp "$NFD_CMAKE" "$NFD_CMAKE.bak"
-          
-          # Add Android guard at the top
           echo "# Guard against building on Android" > "$NFD_CMAKE.new"
           echo "if(ANDROID)" >> "$NFD_CMAKE.new"
           echo "    message(STATUS \"Skipping nativefiledialog on Android (not supported)\")" >> "$NFD_CMAKE.new"
@@ -151,69 +127,47 @@ jobs:
           echo "" >> "$NFD_CMAKE.new"
           cat "$NFD_CMAKE.bak" >> "$NFD_CMAKE.new"
           mv "$NFD_CMAKE.new" "$NFD_CMAKE"
-          
           echo "✓ Added Android guard to nativefiledialog"
         else
-          echo "⚠️  nativefiledialog not found at expected location"
+          echo "⚠️ nativefiledialog not found"
         fi
-    
-    # ---------- Patch rt64 to work with FetchContent SDL2 ----------
+
+    # ---------- Patch rt64 for Android SDL2 ----------
     - name: Patch rt64 CMakeLists.txt for Android SDL2
       run: |
         RT64_CMAKE="lib/rt64/CMakeLists.txt"
-        
         if [ -f "$RT64_CMAKE" ]; then
-          echo "Patching rt64 CMakeLists.txt to use FetchContent SDL2 on Android..."
-          
           cp "$RT64_CMAKE" "$RT64_CMAKE.bak"
-          
-          # Replace find_package(SDL2) with a conditional that works with FetchContent
           sed -i 's/find_package(SDL2 REQUIRED)/if(NOT TARGET SDL2::SDL2)\n    find_package(SDL2 REQUIRED)\nendif()/' "$RT64_CMAKE"
-          
           echo "✓ Patched rt64 to work with FetchContent SDL2"
         else
-          echo "⚠️  rt64 CMakeLists.txt not found"
+          echo "⚠️ rt64 CMakeLists.txt not found"
         fi
 
-    # ---------- file_to_c utility ----------
+    # ---------- Build file_to_c utility ----------
     - name: Build file_to_c
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
         #include <stdio.h>
         #include <stdlib.h>
         int main(int argc,char**argv){
-            if(argc!=5){
-                fprintf(stderr,"Usage: %s <input> <symbol> <cfile> <hfile>\n",argv[0]);
-                return 1;
-            }
-            FILE *in=fopen(argv[1],"rb");
-            if(!in){perror("input");return 1;}
-            fseek(in,0,SEEK_END);
-            long size=ftell(in);
-            fseek(in,0,SEEK_SET);
-
+            if(argc!=5){fprintf(stderr,"Usage: %s <input> <symbol> <cfile> <hfile>\n",argv[0]);return 1;}
+            FILE *in=fopen(argv[1],"rb");if(!in){perror("input");return 1;}
+            fseek(in,0,SEEK_END);long size=ftell(in);fseek(in,0,SEEK_SET);
             FILE *h=fopen(argv[4],"w");
             fprintf(h,"#pragma once\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n",argv[2],argv[2]);
             fclose(h);
-
             FILE *c=fopen(argv[3],"w");
             fprintf(c,"#include \"%s\"\nconst unsigned char %s[] = {\n",argv[4],argv[2]);
-            for(long i=0;i<size;i++){
-                unsigned char b;
-                fread(&b,1,1,in);
-                fprintf(c,"0x%02x%s",b,(i+1<size)?",":"");
-                if((i+1)%16==0) fprintf(c,"\n");
-            }
+            for(long i=0;i<size;i++){unsigned char b;fread(&b,1,1,in);fprintf(c,"0x%02x%s",b,(i+1<size)?",":"");if((i+1)%16==0) fprintf(c,"\n");}
             fprintf(c,"\n};\nconst unsigned int %s_size = %ld;\n",argv[2],size);
-            fclose(c);
-            fclose(in);
-            return 0;
+            fclose(c);fclose(in);return 0;
         }
         EOF
         gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
         chmod +x /usr/local/bin/file_to_c
 
-    # ---------- Launcher icons ----------
+    # ---------- Prepare launcher icons ----------
     - name: Prepare launcher icons
       run: |
         for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
@@ -229,7 +183,7 @@ jobs:
     - name: Copy static assets
       run: cp -R assets/* android/app/src/main/assets/
 
-    # ---------- Generate shader headers dynamically ----------
+    # ---------- Generate shader headers ----------
     - name: Generate shader headers dynamically
       run: |
         shopt -s nullglob
@@ -241,7 +195,7 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Generate mod headers dynamically ----------
+    # ---------- Generate mod headers ----------
     - name: Generate mod headers dynamically
       run: |
         shopt -s nullglob
@@ -253,7 +207,7 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Generate patches_bin.c dynamically ----------
+    # ---------- Generate patches_bin.c ----------
     - name: Generate patches_bin.c dynamically
       run: |
         if [ -f patches/patches.bin ]; then
