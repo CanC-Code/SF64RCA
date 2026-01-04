@@ -16,20 +16,20 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # -------------------------------
 # Compile definitions
 # -------------------------------
-# These mirror desktop defines, adapted for Android
 add_compile_definitions(
-    ANDROID                      # Android build
-    SDL_MAIN_HANDLED              # SDL main handled manually
-    HLSL_CPU                      # Use CPU-based HLSL compilation
-    RT64_STATIC                   # Static RT64 library
-    RT64_SDL_WINDOW_VULKAN        # Use Vulkan window in RT64
-    DEFER_ROM_PATCHES             # Patch ROMs later
+    ANDROID
+    SDL_MAIN_HANDLED
+    HLSL_CPU
+    RT64_STATIC
+    RT64_SDL_WINDOW_VULKAN
+    DEFER_ROM_PATCHES
 )
 
 # -------------------------------
 # Android NDK / ABI
 # -------------------------------
 set(CMAKE_ANDROID_STL_TYPE c++_shared)
+
 if(NOT DEFINED CMAKE_ANDROID_ARCH_ABI)
     set(CMAKE_ANDROID_ARCH_ABI arm64-v8a)
 endif()
@@ -42,7 +42,7 @@ find_library(android-lib android)
 find_library(z-lib z)
 
 # -------------------------------
-# Fetch SDL2 if not already available
+# Fetch SDL2 (Android-safe)
 # -------------------------------
 if(NOT TARGET SDL2::SDL2)
     include(FetchContent)
@@ -55,7 +55,7 @@ if(NOT TARGET SDL2::SDL2)
 endif()
 
 # -------------------------------
-# Disable NativeFileDialog for Android
+# Disable NativeFileDialog
 # -------------------------------
 set(BUILD_NFD OFF CACHE BOOL "" FORCE)
 set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
@@ -64,9 +64,10 @@ set(NFD_BUILD OFF CACHE BOOL "" FORCE)
 # -------------------------------
 # External libraries
 # -------------------------------
+
 # RT64
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 set(BUILD_SHARED_LIBS OFF)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
 # Lunasvg
 set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -87,12 +88,17 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime)
 file(GLOB FUNC_C_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledFuncs/*.c)
 file(GLOB FUNC_CXX_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledFuncs/*.cpp)
 
-add_library(RecompiledFuncs STATIC ${FUNC_C_SOURCES} ${FUNC_CXX_SOURCES})
+add_library(RecompiledFuncs STATIC
+    ${FUNC_C_SOURCES}
+    ${FUNC_CXX_SOURCES}
+)
+
 target_compile_options(RecompiledFuncs PRIVATE
     -fno-strict-aliasing
     -Wno-unused-variable
     -Wno-implicit-function-declaration
 )
+
 target_include_directories(RecompiledFuncs PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/ultramodern/include
@@ -101,24 +107,30 @@ target_include_directories(RecompiledFuncs PRIVATE
 )
 
 # -------------------------------
-# PatchesLib Library
+# PatchesLib (optional)
 # -------------------------------
+set(HAVE_PATCHES OFF)
+
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches.c)
     add_library(PatchesLib STATIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches.c
         ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches_bin.c
     )
+
     target_compile_options(PatchesLib PRIVATE
         -fno-strict-aliasing
         -Wno-unused-variable
         -Wno-implicit-function-declaration
     )
+
     target_include_directories(PatchesLib PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../../include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/ultramodern/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/librecomp/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/N64Recomp/include
     )
+
+    set(HAVE_PATCHES ON)
 endif()
 
 # -------------------------------
@@ -127,35 +139,33 @@ endif()
 file(GLOB_RECURSE GAME_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/main/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/game/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/ui/**/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/ui/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/platform/android/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../rsp/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Backends/*.cpp
 )
 
 # -------------------------------
-# Automatically include Gradle-generated C files
+# Generated C sources (Gradle)
 # -------------------------------
 set(GENERATED_SOURCES "")
-set(GENERATED_DIRS
-    "${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cpatches"
-)
 
-foreach(dir ${GENERATED_DIRS})
+foreach(dir
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cpatches
+)
     if(EXISTS ${dir})
-        file(GLOB GENERATED_IN_DIR "${dir}/*.c")
-        list(APPEND GENERATED_SOURCES ${GENERATED_IN_DIR})
+        file(GLOB _gen "${dir}/*.c")
+        list(APPEND GENERATED_SOURCES ${_gen})
     endif()
 endforeach()
 
 # -------------------------------
-# Main shared library for APK
+# Main shared library (.so)
 # -------------------------------
-# Android does not use add_executable; Gradle builds APK and loads this .so
 add_library(starfox64recompiled SHARED
-    ${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/cpp/SDL_main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cpp/SDL_main.cpp
     ${GAME_SOURCES}
     ${GENERATED_SOURCES}
 )
@@ -170,15 +180,13 @@ target_include_directories(starfox64recompiled PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/GamepadMotionHelpers
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Backends
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/hlslpp/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/dxc/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/rhi
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/render
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/freetype-windows-binaries/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/hlslpp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/dxc/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/SlotMap
-    ${CMAKE_CURRENT_BINARY_DIR}/shaders
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods
@@ -199,7 +207,6 @@ target_compile_options(starfox64recompiled PRIVATE
 # -------------------------------
 target_link_libraries(starfox64recompiled
     RecompiledFuncs
-    PatchesLib
     librecomp
     ultramodern
     rt64
@@ -212,19 +219,13 @@ target_link_libraries(starfox64recompiled
     ${z-lib}
 )
 
+if(HAVE_PATCHES)
+    target_link_libraries(starfox64recompiled PatchesLib)
+endif()
+
 # -------------------------------
 # Output directory
 # -------------------------------
 set_target_properties(starfox64recompiled PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 )
-
-# -------------------------------
-# Notes / Android adaptation:
-# - Desktop uses add_executable, N64Recomp for patches, file_to_c commands
-# - On Android, Gradle generates shader/mod/patch .c files beforehand
-# - This CMake consumes generated sources only
-# - NativeFileDialog is disabled
-# - SDL2 is pulled via FetchContent if missing
-# - APK loads the .so; no add_executable
-# -------------------------------
