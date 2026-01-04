@@ -94,6 +94,11 @@ file(GLOB_RECURSE GAME_SOURCES
     ${PROJECT_ROOT}/src/*.cpp
 )
 
+# Add rml_android.cpp explicitly
+list(APPEND GAME_SOURCES
+    ${PROJECT_ROOT}/src/platform/android/rml_android.cpp
+)
+
 add_library(sf64_native SHARED ${GAME_SOURCES})
 
 # Include paths
