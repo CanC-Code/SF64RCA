@@ -147,7 +147,7 @@ file(GLOB_RECURSE GAME_SOURCES
 )
 
 # -------------------------------
-# Generated C sources (Gradle)
+# Generated C sources (Gradle + assets)
 # -------------------------------
 set(GENERATED_SOURCES "")
 
@@ -155,6 +155,7 @@ foreach(dir
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cpatches
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cassets   # <- includes converted images/fonts/assets
 )
     if(EXISTS ${dir})
         file(GLOB _gen "${dir}/*.c")
@@ -186,6 +187,7 @@ target_include_directories(starfox64recompiled PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cpatches
+    ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cassets
 )
 
 # ---- RT64 contrib includes (conditional, Android-safe) ----
