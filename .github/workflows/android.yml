@@ -75,6 +75,10 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
+    # ---------- Copy dynamic CMakeLists.txt ----------
+    - name: Copy CMakeLists.txt to app
+      run: cp android/CMakeLists.txt android/app/CMakeLists.txt
+
     # ---------- Create required directories ----------
     - name: Ensure required directories exist
       run: |
