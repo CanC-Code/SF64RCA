@@ -15,7 +15,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Match Gradle: -DANDROID_STL=c++_static
 set(CMAKE_ANDROID_STL_TYPE c++_static)
 
-# Silence useless warnings from third-party code
+# Silence warnings from third-party code
 add_compile_options(-Wno-unused-parameter -Wno-unused-variable)
 
 # ------------------------------------------------------------
@@ -41,7 +41,7 @@ add_subdirectory(
 )
 
 # ------------------------------------------------------------
-# FreeType (from source, minimal)
+# FreeType (minimal)
 # ------------------------------------------------------------
 set(FT_DISABLE_ZLIB      ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BZIP2    ON CACHE BOOL "" FORCE)
@@ -60,13 +60,12 @@ add_subdirectory(
     ${CMAKE_BINARY_DIR}/freetype
 )
 
-# Provide canonical target alias expected by consumers
 if (NOT TARGET Freetype::Freetype)
     add_library(Freetype::Freetype ALIAS freetype)
 endif()
 
 # ------------------------------------------------------------
-# RmlUi (force FreeType usage)
+# RmlUi (force FreeType usage, disable samples/tools/tests)
 # ------------------------------------------------------------
 set(RMLUI_BACKEND SDL2 CACHE STRING "" FORCE)
 set(RMLUI_FONT_ENGINE freetype CACHE STRING "" FORCE)
@@ -74,7 +73,7 @@ set(RMLUI_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(RMLUI_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
 set(RMLUI_BUILD_TOOLS   OFF CACHE BOOL "" FORCE)
 
-# Prevent RmlUi from trying system FreeType
+# Force RmlUi to use our FreeType, not system
 set(FREETYPE_FOUND TRUE)
 set(FREETYPE_INCLUDE_DIRS
     ${FREETYPE_SOURCE_DIR}/include
@@ -99,8 +98,10 @@ add_library(sf64_native SHARED
     ${GAME_SOURCES}
 )
 
+# Include paths (including Android-specific headers)
 target_include_directories(sf64_native PRIVATE
     ${PROJECT_ROOT}/src
+    ${PROJECT_ROOT}/src/platform/android      # <-- Android-specific interfaces
     ${SDL2_SOURCE_DIR}/include
     ${FREETYPE_SOURCE_DIR}/include
     ${RMLUI_SOURCE_DIR}/Include
@@ -118,7 +119,7 @@ target_link_libraries(sf64_native
 )
 
 # ------------------------------------------------------------
-# Android log sanity
+# Android log + SDL main
 # ------------------------------------------------------------
 target_compile_definitions(sf64_native PRIVATE
     ANDROID
