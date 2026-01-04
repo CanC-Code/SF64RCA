@@ -36,7 +36,7 @@ android {
 
     externalNativeBuild {
         cmake {
-            // Adjusted path: CMakeLists.txt is in android/, one level above app/
+            // Correct path to CMakeLists.txt in android/ directory
             path file("../CMakeLists.txt")
         }
     }
