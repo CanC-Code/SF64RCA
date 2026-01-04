@@ -231,24 +231,19 @@ jobs:
         
         if [ -f "$CMAKE_FILE" ]; then
           echo "Patching CMakeLists.txt to skip GTK detection on Android..."
-          
-          # Only insert if(NOT ANDROID) if it doesn't already exist
+          # Replace GTK check with a proper Android guard
+          sed -i '/pkg_check_modules(GTK3 gtk+-3.0)/c\if(NOT ANDROID)\n  pkg_check_modules(GTK3 gtk+-3.0)\nendif()' "$CMAKE_FILE"
+
+          # ---------- Verify patch applied ----------
           if ! grep -q "if(NOT ANDROID)" "$CMAKE_FILE"; then
-            sed -i '/pkg_check_modules(GTK3 gtk+-3.0)/i if(NOT ANDROID)' "$CMAKE_FILE"
+            echo "ERROR: GTK patch for Android was not applied correctly!"
+            exit 1
           else
-            echo "if(NOT ANDROID) guard already present, skipping insertion."
+            echo "GTK patch verified ✅"
           fi
-
-          # Only append endif() if the last line isn't already endif()
-          LAST_LINE=$(tail -n 1 "$CMAKE_FILE")
-          if [ "$LAST_LINE" != "endif()" ]; then
-            echo "endif()" >> "$CMAKE_FILE"
-          else
-            echo "endif() already present at the end, skipping append."
-          fi
-
         else
           echo "WARNING: CMakeLists.txt not found at $CMAKE_FILE"
+          exit 1
         fi
 
     # ---------- Build APK ----------
