@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 struct SDL_Window;
 
@@ -15,7 +16,7 @@ namespace SF64RCA {
  * AndroidRT64Wrapper
  *
  * Bridges SDL window management and the RT64 renderer on Android.
- * Manages the RT64Context lifecycle and exposes basic render and resize operations.
+ * Manages the RT64Context lifecycle and exposes basic render, resize, and shutdown operations.
  */
 class AndroidRT64Wrapper {
 public:
@@ -59,7 +60,10 @@ private:
     int surfaceWidth = 0;
     int surfaceHeight = 0;
 
+    std::unique_ptr<uint8_t[]> rdram;
     std::unique_ptr<zelda64::renderer::RT64Context> renderContext;
+
+    mutable std::mutex mutex; // Thread safety
 };
 
 } // namespace SF64RCA
