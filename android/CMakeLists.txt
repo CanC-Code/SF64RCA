@@ -45,17 +45,13 @@ if(NOT EXISTS "${SDL2_SOURCE_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "SDL2 source not found at ${SDL2_SOURCE_DIR}")
 endif()
 
-# Ensure Android variables are set before adding SDL2
-set(ANDROID_PLATFORM 33)  # adjust your target API if needed
+set(ANDROID_PLATFORM 33)  # adjust target API if needed
 set(CMAKE_SYSTEM_NAME Android)
 set(CMAKE_ANDROID_ARCH_ABI ${CMAKE_ANDROID_ARCH_ABI})
 set(CMAKE_ANDROID_NDK $ENV{ANDROID_NDK})
 set(CMAKE_ANDROID_STL_TYPE c++_shared)
-
-# Build SDL2 as static to avoid multiple SDL_main conflicts
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 
-# Add SDL2 subdirectory
 add_subdirectory(${SDL2_SOURCE_DIR} SDL2_build)
 
 # -------------------------------
@@ -76,7 +72,7 @@ set(NFD_BUILD OFF CACHE BOOL "" FORCE)
 # -------------------------------
 # External libraries
 # -------------------------------
-# RT64
+# RT64 Vulkan-only
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
@@ -145,8 +141,11 @@ file(GLOB_RECURSE GAME_SOURCES
     ${CMAKE_SOURCE_DIR}/../lib/RmlUi/Backends/*.cpp
 )
 
-# Include Android SDL_main
+# Include SDL_main
 list(APPEND GAME_SOURCES ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpp/SDL_main.cpp)
+
+# Android RT64 wrapper
+list(APPEND GAME_SOURCES ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpp/AndroidRT64Wrapper.cpp)
 
 # Generated C sources (shaders/mods/patches)
 set(GENERATED_SOURCES "")
@@ -205,6 +204,7 @@ target_include_directories(starfox64recompiled PRIVATE
     ${CMAKE_SOURCE_DIR}/../android/app/src/main/cshaders
     ${CMAKE_SOURCE_DIR}/../android/app/src/main/cmods
     ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpatches
+    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpp   # wrapper includes
 )
 
 # -------------------------------
