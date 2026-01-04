@@ -13,6 +13,17 @@ namespace zelda64::renderer {
 namespace SF64RCA {
 
 /**
+ * RendererBackend
+ *
+ * Allows selecting the graphics API backend.
+ */
+enum class RendererBackend {
+    Vulkan,
+    OpenGLES,
+    Auto  // Default: Vulkan if available
+};
+
+/**
  * AndroidRT64Wrapper
  *
  * Bridges SDL window management and the RT64 renderer on Android.
@@ -28,45 +39,31 @@ public:
     AndroidRT64Wrapper& operator=(const AndroidRT64Wrapper&) = delete;
 
     /**
-     * Initialize RT64 with an existing SDL window.
-     * Returns false on failure.
+     * Initialize RT64 with an existing SDL window and optional backend.
      */
-    bool initialize(SDL_Window* window, int width, int height);
+    bool initialize(SDL_Window* window, int width, int height, RendererBackend backend = RendererBackend::Auto);
 
     /**
-     * Resize the rendering surface.
+     * Set rendering backend dynamically (future use).
      */
+    void setBackend(RendererBackend backend);
+
     void resize(int width, int height);
-
-    /**
-     * Render a single frame.
-     */
     void renderFrame();
-
-    /**
-     * Load a ROM into RDRAM. Returns false if size exceeds 64MB.
-     */
     bool loadRom(const uint8_t* data, size_t size);
-
-    /**
-     * Shut down RT64 cleanly.
-     */
     void shutdown();
-
-    /**
-     * Whether RT64 is fully initialized.
-     */
     bool isInitialized() const;
 
 private:
     bool initialized = false;
     SDL_Window* sdlWindow = nullptr;
-
     int surfaceWidth = 0;
     int surfaceHeight = 0;
 
     std::unique_ptr<uint8_t[]> rdram;
     std::unique_ptr<zelda64::renderer::RT64Context> renderContext;
+
+    RendererBackend selectedBackend = RendererBackend::Auto;
 
     mutable std::mutex mutex; // Thread safety
 };
