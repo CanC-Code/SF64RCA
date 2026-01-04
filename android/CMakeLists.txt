@@ -40,6 +40,7 @@ endif()
 find_library(log-lib log)
 find_library(android-lib android)
 find_library(z-lib z)
+find_library(vulkan-lib vulkan)
 
 # -------------------------------
 # Fetch SDL2 (Android-safe)
@@ -180,18 +181,34 @@ target_include_directories(starfox64recompiled PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/GamepadMotionHelpers
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Backends
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/rhi
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/render
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/hlslpp/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/dxc/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/SlotMap
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cpatches
 )
+
+# ---- RT64 contrib includes (conditional, Android-safe) ----
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib)
+    target_include_directories(starfox64recompiled PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/rhi
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/render
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib
+    )
+
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/hlslpp/include)
+        target_include_directories(starfox64recompiled PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/hlslpp/include
+        )
+    endif()
+
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/dxc/inc)
+        target_include_directories(starfox64recompiled PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/contrib/dxc/inc
+        )
+    endif()
+endif()
 
 # -------------------------------
 # Compiler options
@@ -214,6 +231,7 @@ target_link_libraries(starfox64recompiled
     RmlUi::Debugger
     lunasvg
     SDL2::SDL2
+    ${vulkan-lib}
     ${log-lib}
     ${android-lib}
     ${z-lib}
