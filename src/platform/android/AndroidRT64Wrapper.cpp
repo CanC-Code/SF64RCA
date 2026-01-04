@@ -1,5 +1,4 @@
 #include "AndroidRT64Wrapper.h"
-
 #include <SDL.h>
 #include <android/log.h>
 #include "ultramodern/ultramodern.hpp"
@@ -18,6 +17,7 @@ AndroidRT64Wrapper::~AndroidRT64Wrapper() {
 }
 
 bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
+    std::lock_guard<std::mutex> lock(mutex);
     if (initialized) return true;
     if (!window) {
         LOGE("SDL_Window is null");
@@ -31,11 +31,13 @@ bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
     ultramodern::renderer::WindowHandle window_handle{};
     window_handle.window = window;
 
-    static uint8_t rdram[0x4000000]; // 64MB RDRAM
-    renderContext = zelda64::renderer::create_render_context(rdram, window_handle, true);
+    // Allocate RDRAM dynamically for safety
+    rdram = std::make_unique<uint8_t[]>(0x4000000); // 64MB
+    renderContext = zelda64::renderer::create_render_context(rdram.get(), window_handle, true);
 
     if (!renderContext) {
         LOGE("Failed to create RT64Context");
+        rdram.reset();
         return false;
     }
 
@@ -49,23 +51,23 @@ bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
 }
 
 void AndroidRT64Wrapper::resize(int width, int height) {
+    std::lock_guard<std::mutex> lock(mutex);
     if (!initialized || !renderContext) return;
     if (width == surfaceWidth && height == surfaceHeight) return;
 
     surfaceWidth = width;
     surfaceHeight = height;
 
-    // Update userConfig resolution to match new swap chain size
     auto& config = ultramodern::renderer::get_graphics_config();
     config.manual_width = width;
     config.manual_height = height;
 
     renderContext->update_config(config, config);
-
     LOGI("RT64Context resized to %dx%d", width, height);
 }
 
 void AndroidRT64Wrapper::renderFrame() {
+    std::lock_guard<std::mutex> lock(mutex);
     if (!initialized || !renderContext) return;
 
     renderContext->check_texture_pack_actions();
@@ -73,13 +75,14 @@ void AndroidRT64Wrapper::renderFrame() {
 }
 
 void AndroidRT64Wrapper::shutdown() {
+    std::lock_guard<std::mutex> lock(mutex);
     if (!initialized) return;
 
     if (renderContext) {
         renderContext->shutdown();
         renderContext.reset();
     }
-
+    rdram.reset();
     sdlWindow = nullptr;
     initialized = false;
 
