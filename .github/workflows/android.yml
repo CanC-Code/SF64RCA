@@ -137,18 +137,18 @@ jobs:
         diff -u "$RT64.bak" "$RT64" || true
 
     # ------------------------------------------------------------
-    # Patch RmlUi CMakeLists for Android
+    # Patch RmlUi CMakeLists for Android (includes SDL_GL3 backend)
     # ------------------------------------------------------------
     - name: Patch RmlUi CMakeLists for Android
       run: |
         RMLUI_CMAKE=android/RmlUi/CMakeLists.txt
         cp "$RMLUI_CMAKE" "$RMLUI_CMAKE.bak"
 
-        # Insert Android-specific configuration after 'project(...)' line
         awk '
           {print}
           /^project\(.*\)/ {
             print "# --- Android-specific configuration ---"
+            print "set(RMLUI_BACKEND SDL_GL3)"
             print "if(ANDROID)"
             print "    message(STATUS \"Configuring RmlUi for Android build...\")"
             print ""
