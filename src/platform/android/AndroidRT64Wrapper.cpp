@@ -1,9 +1,10 @@
 #include "AndroidRT64Wrapper.h"
 #include <SDL.h>
 #include <android/log.h>
+#include <cstring>
+
 #include "ultramodern/ultramodern.hpp"
 #include "zelda_render.h"
-#include <cstring>
 
 #define LOG_TAG "AndroidRT64Wrapper"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -25,6 +26,15 @@ bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
         return false;
     }
 
+    // -------------------------------
+    // Vulkan assertion
+    // -------------------------------
+    if (!SDL_Vulkan_LoadLibrary(nullptr)) {
+        LOGE("Vulkan not available on this device");
+        return false;
+    }
+    LOGI("Vulkan loader OK");
+
     sdlWindow = window;
     surfaceWidth = width;
     surfaceHeight = height;
@@ -36,18 +46,23 @@ bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
     rdram = std::make_unique<uint8_t[]>(0x4000000); // 64MB
     std::memset(rdram.get(), 0, 0x4000000);
 
+    // Create render context with Vulkan
     renderContext = zelda64::renderer::create_render_context(rdram.get(), window_handle, true);
     if (!renderContext) {
-        LOGE("Failed to create RT64Context");
+        LOGE("Failed to create RT64 Vulkan context");
         rdram.reset();
         return false;
     }
 
     auto& config = ultramodern::renderer::get_graphics_config();
+    config.backend = ultramodern::renderer::Backend::Vulkan;
+    config.manual_width = width;
+    config.manual_height = height;
+
     renderContext->update_config(config, config);
 
     initialized = true;
-    LOGI("RT64Context initialized (%dx%d)", width, height);
+    LOGI("RT64 Vulkan context initialized (%dx%d)", width, height);
     return true;
 }
 
@@ -64,7 +79,7 @@ void AndroidRT64Wrapper::resize(int width, int height) {
     config.manual_height = height;
 
     renderContext->update_config(config, config);
-    LOGI("RT64Context resized to %dx%d", width, height);
+    LOGI("RT64 resized to %dx%d", width, height);
 }
 
 void AndroidRT64Wrapper::renderFrame() {
@@ -104,7 +119,7 @@ void AndroidRT64Wrapper::shutdown() {
     sdlWindow = nullptr;
     initialized = false;
 
-    LOGI("RT64Context shutdown complete");
+    LOGI("RT64 Vulkan context shutdown complete");
 }
 
 bool AndroidRT64Wrapper::isInitialized() const {
