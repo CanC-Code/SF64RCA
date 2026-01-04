@@ -28,3 +28,6 @@
 [submodule "android/freetype"]
 	path = android/freetype
 	url = https://gitlab.freedesktop.org/freetype/freetype.git
+[submodule "android/RmlUi"]
+	path = android/RmlUi
+	url = https://github.com/mikke89/RmlUi.git
