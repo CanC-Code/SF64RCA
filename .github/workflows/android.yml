@@ -55,7 +55,7 @@ jobs:
         java-version: 17
 
     # ---------- Android SDK / NDK ----------
-    - name: Setup Android SDK and NDK
+    - name: Setup Android SDK & NDK
       uses: android-actions/setup-android@v3
       with:
         accept-android-sdk-licenses: true
@@ -64,6 +64,17 @@ jobs:
           platforms;android-34
           build-tools;34.0.0
           ndk;27.3.13750724
+
+    # ---------- Export Android environment variables ----------
+    - name: Export Android environment variables
+      run: |
+        echo "ANDROID_HOME=$HOME/Android/Sdk" >> $GITHUB_ENV
+        echo "ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/27.3.13750724" >> $GITHUB_ENV
+        echo "PATH=$HOME/Android/Sdk/platform-tools:$HOME/Android/Sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
+
+    # ---------- Accept all SDK licenses ----------
+    - name: Accept Android SDK licenses
+      run: yes | $HOME/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
     # ---------- Install CMake ----------
     - name: Install CMake 3.27.3
