@@ -18,21 +18,27 @@ jobs:
       JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
 
     steps:
-    # ---------- Checkout ----------
-    - name: Checkout repository (with submodules)
+    # ------------------------------------------------------------
+    # Checkout (with submodules)
+    # ------------------------------------------------------------
+    - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: recursive
         fetch-depth: 0
 
-    # ---------- Set up JDK ----------
+    # ------------------------------------------------------------
+    # Java
+    # ------------------------------------------------------------
     - name: Set up JDK 17
       uses: actions/setup-java@v3
       with:
         distribution: temurin
         java-version: 17
 
-    # ---------- Install Android SDK & NDK ----------
+    # ------------------------------------------------------------
+    # Android SDK / NDK
+    # ------------------------------------------------------------
     - name: Install Android SDK & NDK
       uses: android-actions/setup-android@v2
       with:
@@ -40,169 +46,123 @@ jobs:
         ndk-version: 27.3.13750724
         components: build-tools;34.0.0,platforms;android-34
 
-    # ---------- Verify SDL2 submodule ----------
+    # ------------------------------------------------------------
+    # Verify SDL2 submodule
+    # ------------------------------------------------------------
     - name: Verify SDL2 submodule
       run: |
-        echo "Verifying SDL2 submodule..."
-        git submodule status
         if [ ! -f "android/SDL2/CMakeLists.txt" ]; then
-          echo "✗ SDL2 submodule missing or not initialized"
-          echo "Contents of android/:"
-          ls -la android || true
+          echo "SDL2 submodule missing or not initialized"
           exit 1
         fi
-        echo "✓ SDL2 submodule present and valid"
+        echo "SDL2 submodule OK"
 
-    # ---------- Install ImageMagick ----------
+    # ------------------------------------------------------------
+    # System tools
+    # ------------------------------------------------------------
     - name: Install ImageMagick
       run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-    # ---------- Ensure file_to_c is executable ----------
     - name: Make file_to_c executable
       run: chmod +x ./file_to_c
 
-    # ---------- Convert NRM assets to C ----------
+    # ------------------------------------------------------------
+    # Asset → C conversion
+    # ------------------------------------------------------------
     - name: Convert NRM assets
       run: |
-        echo "Converting NRM assets..."
         mkdir -p android/app/src/main/cmods
         for f in assets/*.nrm; do
           [ -f "$f" ] || continue
-          BASENAME=$(basename "$f" .nrm | tr -c 'a-zA-Z0-9_' '_')
-          ./file_to_c "$f" "$BASENAME" \
-            android/app/src/main/cmods/${BASENAME}.c \
-            android/app/src/main/cmods/${BASENAME}.h
+          NAME=$(basename "$f" .nrm | tr -c 'a-zA-Z0-9_' '_')
+          ./file_to_c "$f" "$NAME" \
+            android/app/src/main/cmods/${NAME}.c \
+            android/app/src/main/cmods/${NAME}.h
         done
 
-    # ---------- Convert Images, Fonts, SVGs ----------
-    - name: Convert images, fonts, and SVGs
+    - name: Convert images, fonts, SVGs
       run: |
-        echo "Converting images, fonts, and SVGs..."
         mkdir -p android/app/src/main/cassets
         shopt -s globstar nullglob
         for f in assets/**/*.{png,jpg,jpeg,svg,ttf,otf}; do
-          BASENAME=$(basename "$f" | tr -c 'a-zA-Z0-9_' '_')
-          BASENAME="${BASENAME%.*}"
-          ./file_to_c "$f" "$BASENAME" \
-            android/app/src/main/cassets/${BASENAME}.c \
-            android/app/src/main/cassets/${BASENAME}.h
+          NAME=$(basename "$f" | tr -c 'a-zA-Z0-9_' '_')
+          NAME="${NAME%.*}"
+          ./file_to_c "$f" "$NAME" \
+            android/app/src/main/cassets/${NAME}.c \
+            android/app/src/main/cassets/${NAME}.h
         done
 
-    # ---------- Copy shaders ----------
+    # ------------------------------------------------------------
+    # Shaders & patches
+    # ------------------------------------------------------------
     - name: Copy shaders
       run: |
         mkdir -p android/app/src/main/cshaders
-        cp -r assets/shaders/* android/app/src/main/cshaders/ || true
+        cp -r shaders/* android/app/src/main/cshaders/ || true
 
-    # ---------- Copy patches ----------
     - name: Copy patches
       run: |
         mkdir -p android/app/src/main/cpatches
         cp -r patches/* android/app/src/main/cpatches/ || true
 
-    # ---------- Generate launcher icons ----------
+    # ------------------------------------------------------------
+    # Launcher icons
+    # ------------------------------------------------------------
     - name: Generate launcher icons
       run: |
-        ICON_SRC=icons/512.png
-        declare -A SIZES=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
-        for dpi in "${!SIZES[@]}"; do
-          mkdir -p android/app/src/main/res/mipmap-$dpi
-          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} \
-            android/app/src/main/res/mipmap-$dpi/ic_launcher.png
-          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} \
-            android/app/src/main/res/mipmap-$dpi/ic_launcher_round.png
+        ICON=icons/512.png
+        declare -A DPI=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
+        for d in "${!DPI[@]}"; do
+          mkdir -p android/app/src/main/res/mipmap-$d
+          convert "$ICON" -resize ${DPI[$d]}x${DPI[$d]} \
+            android/app/src/main/res/mipmap-$d/ic_launcher.png
+          convert "$ICON" -resize ${DPI[$d]}x${DPI[$d]} \
+            android/app/src/main/res/mipmap-$d/ic_launcher_round.png
         done
 
-    # ---------- Patch RT64 CMakeLists for Android ----------
+    # ------------------------------------------------------------
+    # Patch RT64 (Android guard workaround)
+    # ------------------------------------------------------------
     - name: Patch RT64 CMakeLists for Android
       run: |
-        RT64_CMAKE=lib/rt64/CMakeLists.txt
-        cp "$RT64_CMAKE" "$RT64_CMAKE.backup"
-        sed -i 's/^[[:space:]]*find_package(SDL2 REQUIRED)/# &/' "$RT64_CMAKE"
-        sed -i 's/^[[:space:]]*add_subdirectory(.*SDL.*)/# &/' "$RT64_CMAKE"
-        sed -i 's/^[[:space:]]*add_subdirectory(.*nativefiledialog.*)/# &/' "$RT64_CMAKE"
-        sed -i '/include_directories.*SDL2/s/^/# /' "$RT64_CMAKE"
-        sed -i '/include_directories.*NFD/s/^/# /' "$RT64_CMAKE"
-        sed -i '/target_include_directories.*SDL2/s/^/# /' "$RT64_CMAKE"
-        sed -i '/target_include_directories.*NFD/s/^/# /' "$RT64_CMAKE"
-        sed -i '/target_link_libraries.*NFD/s/^/# /' "$RT64_CMAKE"
-        diff -u "$RT64_CMAKE.backup" "$RT64_CMAKE" || true
+        RT64=lib/rt64/CMakeLists.txt
+        cp "$RT64" "$RT64.bak"
 
-    # ---------- Inject FreeType into RmlUi CMake ----------
-    - name: Inject FreeType into RmlUi CMake
-      run: |
-        RMLUI_CMAKE=android/RmlUi/CMakeLists.txt
-        echo "Patching $RMLUI_CMAKE to include FreeType..."
-        cp "$RMLUI_CMAKE" "$RMLUI_CMAKE.backup"
-        awk '{
-          print $0
-          if ($1=="project(") print "add_subdirectory(freetype)"
-        }' "$RMLUI_CMAKE" > "$RMLUI_CMAKE.patched"
-        mv "$RMLUI_CMAKE.patched" "$RMLUI_CMAKE"
-        echo "✅ FreeType submodule injected"
+        sed -i 's/^[[:space:]]*find_package(SDL2 REQUIRED)/# &/' "$RT64"
+        sed -i 's/^[[:space:]]*add_subdirectory(.*SDL.*)/# &/' "$RT64"
+        sed -i 's/^[[:space:]]*add_subdirectory(.*nativefiledialog.*)/# &/' "$RT64"
+        sed -i '/SDL2::SDL2/s/^/# /' "$RT64"
+        sed -i '/NFD/s/^/# /' "$RT64"
 
-    # ---------- Build FreeType and RmlUi per ABI ----------
-    - name: Build FreeType and RmlUi
-      run: |
-        ABIS=("arm64-v8a" "armeabi-v7a" "x86" "x86_64")
-        for ABI in "${ABIS[@]}"; do
+        diff -u "$RT64.bak" "$RT64" || true
 
-          echo "=== Building FreeType for $ABI ==="
-          FT_BUILD=build-freetype-$ABI
-          mkdir -p "$FT_BUILD"
-          cd "$FT_BUILD"
-          cmake ../android/freetype \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=$ABI \
-            -DANDROID_PLATFORM=android-34 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF
-          cmake --build . -- -j$(nproc)
-          cd ..
-
-          echo "=== Building RmlUi for $ABI ==="
-          RMLUI_BUILD=build-rmlui-$ABI
-          mkdir -p "$RMLUI_BUILD"
-          cd "$RMLUI_BUILD"
-          cmake ../android/RmlUi \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=$ABI \
-            -DANDROID_PLATFORM=android-34 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DFREETYPE_INCLUDE_DIRS=../build-freetype-$ABI/include \
-            -DFREETYPE_LIBRARY=../build-freetype-$ABI/libfreetype.a \
-            -DUSE_SYSTEM_FREETYPE=OFF
-          cmake --build . -- -j$(nproc)
-
-          mkdir -p ../../android/app/src/main/jniLibs/$ABI
-          cp Source/libRmlUi.so ../../android/app/src/main/jniLibs/$ABI/
-          cd ..
-        done
-
-    # ---------- Build APK ----------
+    # ------------------------------------------------------------
+    # Build APK (CMake invoked by Gradle)
+    # ------------------------------------------------------------
     - name: Build Debug APK
       working-directory: android
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-    # ---------- Run lint ----------
+    # ------------------------------------------------------------
+    # Lint (non-fatal)
+    # ------------------------------------------------------------
     - name: Run Android lint
       working-directory: android
       continue-on-error: true
       run: ./gradlew lintDebug --no-daemon
 
-    # ---------- Upload APK ----------
+    # ------------------------------------------------------------
+    # Artifacts
+    # ------------------------------------------------------------
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: Starfox64Recompiled-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
 
-    # ---------- Upload build logs on failure ----------
-    - name: Upload build logs
+    - name: Upload build logs on failure
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: build-logs
-        path: |
-          android/app/build/
-          build_rt64/
+        path: android/app/build/
