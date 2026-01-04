@@ -1,142 +1,126 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SF64RCA LANGUAGES C CXX)
+# ------------------------------------------------------------
+# Project
+# ------------------------------------------------------------
+project(sf64rca LANGUAGES C CXX)
 
 # ------------------------------------------------------------
 # Android / Toolchain sanity
 # ------------------------------------------------------------
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Let Gradle control STL — do NOT fight it
-# ANDROID_STL is passed as c++_static by Gradle
+# Match Gradle: -DANDROID_STL=c++_static
+set(CMAKE_ANDROID_STL_TYPE c++_static)
+
+# Silence useless warnings from third-party code
+add_compile_options(-Wno-unused-parameter -Wno-unused-variable)
 
 # ------------------------------------------------------------
 # Paths
 # ------------------------------------------------------------
+set(PROJECT_ROOT        ${CMAKE_CURRENT_LIST_DIR}/..)
+set(ANDROID_ROOT        ${CMAKE_CURRENT_LIST_DIR})
 
-set(ROOT_DIR ${CMAKE_SOURCE_DIR}/..)
-
-set(SDL2_SOURCE_DIR        ${ROOT_DIR}/android/SDL2)
-set(LUNASVG_SOURCE_DIR    ${ROOT_DIR}/lib/lunasvg)
-set(RMLUI_SOURCE_DIR      ${ROOT_DIR}/lib/RmlUi)
-set(N64MR_SOURCE_DIR      ${ROOT_DIR}/lib/N64ModernRuntime)
-set(RT64_SOURCE_DIR       ${ROOT_DIR}/lib/rt64)
-
-# Binary dirs (required for out-of-tree add_subdirectory)
-set(SDL2_BINARY_DIR     ${CMAKE_BINARY_DIR}/SDL2)
-set(LUNASVG_BINARY_DIR  ${CMAKE_BINARY_DIR}/lunasvg)
-set(RMLUI_BINARY_DIR    ${CMAKE_BINARY_DIR}/rmlui)
-set(N64MR_BINARY_DIR    ${CMAKE_BINARY_DIR}/n64mr)
-set(RT64_BINARY_DIR     ${CMAKE_BINARY_DIR}/rt64)
+set(SDL2_SOURCE_DIR     ${ANDROID_ROOT}/SDL2)
+set(FREETYPE_SOURCE_DIR ${ANDROID_ROOT}/freetype)
+set(RMLUI_SOURCE_DIR    ${PROJECT_ROOT}/RmlUi)
 
 # ------------------------------------------------------------
-# SDL2 configuration (Android)
+# SDL2 (from source)
 # ------------------------------------------------------------
-
-set(SDL_SHARED ON  CACHE BOOL "" FORCE)
-set(SDL_STATIC OFF CACHE BOOL "" FORCE)
-
-set(SDL_TEST OFF CACHE BOOL "" FORCE)
-set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-
-set(SDL_JOYSTICK ON CACHE BOOL "" FORCE)
-set(SDL_HAPTIC   ON CACHE BOOL "" FORCE)
-set(SDL_SENSOR   ON CACHE BOOL "" FORCE)
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON  CACHE BOOL "" FORCE)
+set(SDL_TEST OFF    CACHE BOOL "" FORCE)
 
 add_subdirectory(
     ${SDL2_SOURCE_DIR}
-    ${SDL2_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/SDL2
 )
 
 # ------------------------------------------------------------
-# lunasvg
+# FreeType (from source, minimal)
 # ------------------------------------------------------------
+set(FT_DISABLE_ZLIB      ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BZIP2    ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_PNG      ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BROTLI   ON CACHE BOOL "" FORCE)
 
-set(LUNASVG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-set(LUNASVG_BUILD_TOOLS  OFF CACHE BOOL "" FORCE)
-set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FT_WITH_ZLIB      OFF CACHE BOOL "" FORCE)
+set(FT_WITH_BZIP2    OFF CACHE BOOL "" FORCE)
+set(FT_WITH_PNG      OFF CACHE BOOL "" FORCE)
+set(FT_WITH_HARFBUZZ OFF CACHE BOOL "" FORCE)
+set(FT_WITH_BROTLI   OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(
-    ${LUNASVG_SOURCE_DIR}
-    ${LUNASVG_BINARY_DIR}
+    ${FREETYPE_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/freetype
 )
 
-# ------------------------------------------------------------
-# RmlUi
-# ------------------------------------------------------------
+# Provide canonical target alias expected by consumers
+if (NOT TARGET Freetype::Freetype)
+    add_library(Freetype::Freetype ALIAS freetype)
+endif()
 
-set(RMLUI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(RMLUI_BUILD_SAMPLES    OFF CACHE BOOL "" FORCE)
-set(RMLUI_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
-set(RMLUI_BUILD_DOCS       OFF CACHE BOOL "" FORCE)
+# ------------------------------------------------------------
+# RmlUi (force FreeType usage)
+# ------------------------------------------------------------
+set(RMLUI_BACKEND SDL2 CACHE STRING "" FORCE)
+set(RMLUI_FONT_ENGINE freetype CACHE STRING "" FORCE)
+set(RMLUI_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+set(RMLUI_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+set(RMLUI_BUILD_TOOLS   OFF CACHE BOOL "" FORCE)
+
+# Prevent RmlUi from trying system FreeType
+set(FREETYPE_FOUND TRUE)
+set(FREETYPE_INCLUDE_DIRS
+    ${FREETYPE_SOURCE_DIR}/include
+    ${CMAKE_BINARY_DIR}/freetype/include
+)
+set(FREETYPE_LIBRARIES freetype)
 
 add_subdirectory(
     ${RMLUI_SOURCE_DIR}
-    ${RMLUI_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/RmlUi
 )
 
 # ------------------------------------------------------------
-# N64ModernRuntime
+# Native game library
 # ------------------------------------------------------------
-
-add_subdirectory(
-    ${N64MR_SOURCE_DIR}
-    ${N64MR_BINARY_DIR}
+file(GLOB_RECURSE GAME_SOURCES
+    ${PROJECT_ROOT}/src/*.c
+    ${PROJECT_ROOT}/src/*.cpp
 )
 
-# ------------------------------------------------------------
-# RT64
-# ------------------------------------------------------------
-
-# Avoid empty include_directories() inside RT64
-# by ensuring required paths exist
-set(RT64_ENABLE_VULKAN ON CACHE BOOL "" FORCE)
-set(RT64_ENABLE_D3D12  OFF CACHE BOOL "" FORCE)
-set(RT64_ENABLE_METAL  OFF CACHE BOOL "" FORCE)
-
-add_subdirectory(
-    ${RT64_SOURCE_DIR}
-    ${RT64_BINARY_DIR}
+add_library(sf64_native SHARED
+    ${GAME_SOURCES}
 )
 
-# ------------------------------------------------------------
-# Main native library
-# ------------------------------------------------------------
-
-add_library(starfox64recompiled SHARED
-    ../src/main/cpp/native-lib.cpp
+target_include_directories(sf64_native PRIVATE
+    ${PROJECT_ROOT}/src
+    ${SDL2_SOURCE_DIR}/include
+    ${FREETYPE_SOURCE_DIR}/include
+    ${RMLUI_SOURCE_DIR}/Include
 )
 
-target_include_directories(starfox64recompiled PRIVATE
-    ${ROOT_DIR}/src
-)
-
-target_link_libraries(starfox64recompiled
-    SDL2
-    SDL2main
-
-    lunasvg
-
-    rmlui_core
-
-    n64modernruntime
-
-    rt64
-
+target_link_libraries(sf64_native
+    SDL2-static
+    freetype
+    RmlCore
+    RmlDebugger
     android
     log
     EGL
-    GLESv2
+    GLESv3
 )
 
 # ------------------------------------------------------------
-# Android-specific defines
+# Android log sanity
 # ------------------------------------------------------------
-
-target_compile_definitions(starfox64recompiled PRIVATE
+target_compile_definitions(sf64_native PRIVATE
     ANDROID
-    SF64_ANDROID
+    SDL_MAIN_HANDLED
 )
