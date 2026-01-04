@@ -1,24 +1,26 @@
-// android/app/build.gradle
 apply plugin: 'com.android.application'
 
 android {
     namespace "com.canccode.sf64"
+
     compileSdk 34
 
-    // Optional: specify NDK version to match local build
     ndkVersion "27.3.13750724"
 
     defaultConfig {
         applicationId "com.canccode.sf64"
+
         minSdk 24
         targetSdk 34
+
         versionCode 1
         versionName "1.0"
 
         externalNativeBuild {
             cmake {
-                // Arguments for CMake
+                // Must match android/CMakeLists.txt
                 arguments "-DANDROID_STL=c++_static"
+                cppFlags "-std=c++20"
             }
         }
     }
@@ -28,16 +30,22 @@ android {
             debuggable true
             jniDebuggable true
         }
+
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            shrinkResources false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
     externalNativeBuild {
         cmake {
-            // Correct path to CMakeLists.txt in android/ directory
+            // Root android/CMakeLists.txt
             path file("../CMakeLists.txt")
+            version "3.22.1"
         }
     }
 
@@ -45,10 +53,23 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    buildFeatures {
+        prefab false
+        viewBinding false
+        dataBinding false
+    }
 }
 
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
+
     implementation "androidx.core:core-ktx:1.12.0"
     implementation "androidx.appcompat:appcompat:1.7.0"
     implementation "com.google.android.material:material:1.10.0"
