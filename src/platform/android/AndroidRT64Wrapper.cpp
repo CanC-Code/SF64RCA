@@ -3,6 +3,7 @@
 #include <android/log.h>
 #include "ultramodern/ultramodern.hpp"
 #include "zelda_render.h"
+#include <cstring>
 
 #define LOG_TAG "AndroidRT64Wrapper"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -31,17 +32,17 @@ bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
     ultramodern::renderer::WindowHandle window_handle{};
     window_handle.window = window;
 
-    // Allocate RDRAM dynamically for safety
+    // Allocate RDRAM dynamically
     rdram = std::make_unique<uint8_t[]>(0x4000000); // 64MB
-    renderContext = zelda64::renderer::create_render_context(rdram.get(), window_handle, true);
+    std::memset(rdram.get(), 0, 0x4000000);
 
+    renderContext = zelda64::renderer::create_render_context(rdram.get(), window_handle, true);
     if (!renderContext) {
         LOGE("Failed to create RT64Context");
         rdram.reset();
         return false;
     }
 
-    // Set initial resolution in userConfig
     auto& config = ultramodern::renderer::get_graphics_config();
     renderContext->update_config(config, config);
 
@@ -72,6 +73,23 @@ void AndroidRT64Wrapper::renderFrame() {
 
     renderContext->check_texture_pack_actions();
     renderContext->update_screen();
+}
+
+bool AndroidRT64Wrapper::loadRom(const uint8_t* data, size_t size) {
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!initialized) {
+        LOGE("Cannot load ROM: RT64Context not initialized");
+        return false;
+    }
+
+    if (!data || size == 0 || size > 0x4000000) {
+        LOGE("Invalid ROM size: %zu bytes", size);
+        return false;
+    }
+
+    std::memcpy(rdram.get(), data, size);
+    LOGI("ROM loaded successfully (%zu bytes)", size);
+    return true;
 }
 
 void AndroidRT64Wrapper::shutdown() {
