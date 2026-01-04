@@ -14,8 +14,9 @@ class MainActivity : SDLActivity() {
             System.loadLibrary("starfox64recompiled")
         }
 
-        // JNI bridge function implemented in C++
+        // JNI bridge functions implemented in C++
         external fun pickRom(uri: String)
+        external fun initRmlUi(assetManager: android.content.res.AssetManager)
     }
 
     private val PICK_ROM_CODE = 12345
@@ -23,11 +24,14 @@ class MainActivity : SDLActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize RmlUi with AssetManager
+        initRmlUi(assets)
+
         checkRom()
     }
 
     private fun checkRom() {
-        // Launch SAF file picker if ROM does not exist
         val romFile = getInternalRomPath()
         if (!romFile.exists()) {
             promptUserForRom()
@@ -51,9 +55,7 @@ class MainActivity : SDLActivity() {
         if (requestCode == PICK_ROM_CODE && resultCode == Activity.RESULT_OK) {
             val uri: Uri? = data?.data
             if (uri != null) {
-                // Persist URI permission for future access
                 contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                // Pass the URI to native code (SDL_main.cpp)
                 pickRom(uri.toString())
             } else {
                 showRomError("No ROM selected. Cannot continue.")
@@ -73,7 +75,6 @@ class MainActivity : SDLActivity() {
             .show()
     }
 
-    // Ensure SDLActivity loads our library
     override fun getLibraries(): Array<String> {
         return arrayOf("starfox64recompiled")
     }
