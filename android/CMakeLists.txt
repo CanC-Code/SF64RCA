@@ -37,15 +37,10 @@ add_compile_definitions(
 )
 
 # -------------------------------
-# Fetch SDL2
+# Use local Android SDL2
 # -------------------------------
-include(FetchContent)
-FetchContent_Declare(
-    SDL2
-    URL https://github.com/libsdl-org/SDL/archive/refs/tags/release-2.30.3.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-)
-FetchContent_MakeAvailable(SDL2)
+set(SDL2_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../android/SDL2")  # adjust path if needed
+add_subdirectory(${SDL2_SOURCE_DIR} SDL2_build)
 
 # -------------------------------
 # System libraries
@@ -135,14 +130,14 @@ file(GLOB_RECURSE GAME_SOURCES
 )
 
 # Include Android SDL_main
-list(APPEND GAME_SOURCES ${CMAKE_SOURCE_DIR}/../app/src/main/cpp/SDL_main.cpp)
+list(APPEND GAME_SOURCES ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpp/SDL_main.cpp)
 
 # Generated C sources (shaders/mods/patches)
 set(GENERATED_SOURCES "")
 foreach(dir
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cshaders
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cmods
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cpatches
+    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cshaders
+    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cmods
+    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpatches
 )
     if(EXISTS ${dir})
         file(GLOB _gen "${dir}/*.c")
@@ -191,9 +186,9 @@ target_include_directories(starfox64recompiled PRIVATE
     ${CMAKE_SOURCE_DIR}/../lib/rt64/src
     ${CMAKE_SOURCE_DIR}/../lib/rt64/src/rhi
     ${CMAKE_SOURCE_DIR}/../lib/rt64/src/render
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cshaders
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cmods
-    ${CMAKE_SOURCE_DIR}/../app/src/main/cpatches
+    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cshaders
+    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cmods
+    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpatches
 )
 
 # -------------------------------
