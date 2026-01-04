@@ -21,9 +21,9 @@ jobs:
 
     steps:
     # ------------------------------------------------------------
-    # Checkout (with submodules)
+    # Checkout repository with submodules
     # ------------------------------------------------------------
-    - name: Checkout repository with submodules
+    - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: recursive
@@ -31,7 +31,7 @@ jobs:
         submodules-strategy: recursive
 
     # ------------------------------------------------------------
-    # Java
+    # Set up JDK 17
     # ------------------------------------------------------------
     - name: Set up JDK 17
       uses: actions/setup-java@v3
@@ -40,7 +40,7 @@ jobs:
         java-version: 17
 
     # ------------------------------------------------------------
-    # Android SDK / NDK
+    # Install Android SDK & NDK
     # ------------------------------------------------------------
     - name: Install Android SDK & NDK
       uses: android-actions/setup-android@v2
@@ -65,7 +65,7 @@ jobs:
         echo "SDL2 & FreeType submodules OK"
 
     # ------------------------------------------------------------
-    # System tools
+    # Install system tools
     # ------------------------------------------------------------
     - name: Install ImageMagick
       run: sudo apt-get update && sudo apt-get install -y imagemagick
@@ -128,7 +128,7 @@ jobs:
         done
 
     # ------------------------------------------------------------
-    # Patch RT64 & RmlUi CMakeLists (Android-specific)
+    # Patch RT64 & RmlUi CMakeLists for Android
     # ------------------------------------------------------------
     - name: Patch RT64 CMakeLists for Android
       run: |
@@ -141,7 +141,7 @@ jobs:
         sed -i '/NFD/s/^/# /' "$RT64"
         diff -u "$RT64.bak" "$RT64" || true
 
-    - name: Patch RmlUi CMakeLists for Android
+    - name: Patch RmlUi CMakeLists for Android (Force)
       run: |
         RMLUI_CMAKE=android/RmlUi/CMakeLists.txt
         cp "$RMLUI_CMAKE" "$RMLUI_CMAKE.bak"
@@ -160,8 +160,8 @@ jobs:
             print "    set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL \"\" FORCE)"
             print "    set(RMLUI_SVG_PLUGIN OFF CACHE BOOL \"\" FORCE)"
             print "    set(RMLUI_HARFBUZZ_SAMPLE OFF CACHE BOOL \"\" FORCE)"
-            print "    set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -DANDROID -fexceptions -frtti\")"
-            print "    set(CMAKE_C_FLAGS \"${CMAKE_C_FLAGS} -DANDROID\")"
+            print "    set(CMAKE_CXX_FLAGS \"-DANDROID -fexceptions -frtti\" CACHE STRING \"Android CXX flags\" FORCE)"
+            print "    set(CMAKE_C_FLAGS \"-DANDROID\" CACHE STRING \"Android C flags\" FORCE)"
             print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cmods\")"
             print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cassets\")"
             print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cshaders\")"
@@ -179,6 +179,12 @@ jobs:
         diff -u "$RMLUI_CMAKE.bak" "$RMLUI_CMAKE" || true
 
     # ------------------------------------------------------------
+    # Clean previous CMake builds (force cache refresh)
+    # ------------------------------------------------------------
+    - name: Clean previous CMake build
+      run: rm -rf android/app/.cbuild
+
+    # ------------------------------------------------------------
     # Build APK (Gradle)
     # ------------------------------------------------------------
     - name: Build Debug APK
@@ -194,7 +200,7 @@ jobs:
       run: ./gradlew lintDebug --no-daemon
 
     # ------------------------------------------------------------
-    # Artifacts
+    # Upload artifacts
     # ------------------------------------------------------------
     - name: Upload APK
       uses: actions/upload-artifact@v4
