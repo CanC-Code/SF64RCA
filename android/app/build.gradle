@@ -19,7 +19,6 @@ android {
             cmake {
                 // Arguments for CMake
                 arguments "-DANDROID_STL=c++_static"
-                // Do NOT hardcode version here; let local.properties + workflow handle it
             }
         }
     }
@@ -37,7 +36,8 @@ android {
 
     externalNativeBuild {
         cmake {
-            path file("CMakeLists.txt")   // Only specify path, not version
+            // Adjusted path: CMakeLists.txt is in android/, one level above app/
+            path file("../CMakeLists.txt")
         }
     }
 
