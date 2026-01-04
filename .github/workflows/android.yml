@@ -10,62 +10,71 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+
     env:
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROID_NDK_ROOT: ${{ github.workspace }}/android-ndk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      NDK_VERSION: 27.3.13750724
 
     steps:
-    # ---------- Checkout ----------
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        fetch-depth: 0
+      # ---------- Checkout ----------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
-    # ---------- Setup Java ----------
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        distribution: 'temurin'
-        java-version: 17
+      # ---------- Set up Java ----------
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
 
-    # ---------- Install Android SDK / NDK ----------
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
-      with:
-        api-level: 34
-        build-tools: 34.0.0
-        ndk-version: 27.3.13750724
-        cmake-version: 3.22.1
-        android-home: ${{ env.ANDROID_SDK_ROOT }}
+      # ---------- Set up Android SDK ----------
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+          ndk: ${{ env.NDK_VERSION }}
 
-    # ---------- Gradle wrapper check ----------
-    - name: Make Gradle executable
-      run: chmod +x android/gradlew
+      # ---------- Cache Gradle ----------
+      - name: Cache Gradle
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/gradle-wrapper.properties') }}
 
-    # ---------- Copy Assets ----------
-    - name: Copy Shaders, Mods, Patches
-      run: |
-        mkdir -p android/app/src/main/cshaders
-        mkdir -p android/app/src/main/cmods
-        mkdir -p android/app/src/main/cpatches
-        cp -r SF64RCA/shaders/* android/app/src/main/cshaders/
-        cp -r SF64RCA/mods/* android/app/src/main/cmods/
-        cp -r SF64RCA/patches/* android/app/src/main/cpatches/
+      # ---------- Cache CMake/NDK Build ----------
+      - name: Cache CMake/NDK
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.HOME }}/.gradle/caches
+          key: ${{ runner.os }}-ndk-${{ env.NDK_VERSION }}
 
-    # ---------- Build Debug APK ----------
-    - name: Assemble Debug APK
-      working-directory: android
-      run: ./gradlew assembleDebug --no-daemon
+      # ---------- Android Build ----------
+      - name: Build Debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
 
-    # ---------- Run Lint ----------
-    - name: Run Android Lint
-      working-directory: android
-      run: ./gradlew lintDebug --no-daemon
+      # ---------- Lint (optional) ----------
+      - name: Run Android Lint
+        working-directory: android
+        run: ./gradlew lintDebug --no-daemon
 
-    # ---------- Upload APK Artifact ----------
-    - name: Upload APK
-      uses: actions/upload-artifact@v3
-      with:
-        name: starfox64-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+      # ---------- Align assets ----------
+      - name: Align Assets
+        run: |
+          mkdir -p android/app/src/main/assets
+          rsync -a ../../assets/ android/app/src/main/assets/
+
+      # ---------- Upload APK Artifact ----------
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: starfox64-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
