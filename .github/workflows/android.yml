@@ -11,6 +11,12 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
+      JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
+
     steps:
     # ---------- Checkout ----------
     - name: Checkout repository (with submodules)
@@ -41,8 +47,11 @@ jobs:
         git submodule status
         if [ ! -f "android/SDL2/CMakeLists.txt" ]; then
           echo "✗ SDL2 submodule missing or not initialized"
+          echo "Contents of android/:"
+          ls -la android || true
           exit 1
         fi
+        echo "✓ SDL2 submodule present and valid"
 
     # ---------- Install ImageMagick ----------
     - name: Install ImageMagick
@@ -52,25 +61,43 @@ jobs:
     - name: Make file_to_c executable
       run: chmod +x ./file_to_c
 
-    # ---------- Convert assets ----------
-    - name: Convert assets to C
+    # ---------- Convert NRM assets to C ----------
+    - name: Convert NRM assets
       run: |
-        mkdir -p android/app/src/main/cmods android/app/src/main/cassets
-        shopt -s globstar nullglob
+        echo "Converting NRM assets..."
+        mkdir -p android/app/src/main/cmods
         for f in assets/*.nrm; do
+          [ -f "$f" ] || continue
           BASENAME=$(basename "$f" .nrm | tr -c 'a-zA-Z0-9_' '_')
-          ./file_to_c "$f" "$BASENAME" android/app/src/main/cmods/${BASENAME}.c android/app/src/main/cmods/${BASENAME}.h
-        done
-        for f in assets/**/*.{png,jpg,jpeg,svg,ttf,otf}; do
-          BASENAME=$(basename "$f" | tr -c 'a-zA-Z0-9_' '_'); BASENAME="${BASENAME%.*}"
-          ./file_to_c "$f" "$BASENAME" android/app/src/main/cassets/${BASENAME}.c android/app/src/main/cassets/${BASENAME}.h
+          ./file_to_c "$f" "$BASENAME" \
+            android/app/src/main/cmods/${BASENAME}.c \
+            android/app/src/main/cmods/${BASENAME}.h
         done
 
-    # ---------- Copy shaders & patches ----------
-    - name: Copy shaders and patches
+    # ---------- Convert Images, Fonts, SVGs ----------
+    - name: Convert images, fonts, and SVGs
       run: |
-        mkdir -p android/app/src/main/cshaders android/app/src/main/cpatches
+        echo "Converting images, fonts, and SVGs..."
+        mkdir -p android/app/src/main/cassets
+        shopt -s globstar nullglob
+        for f in assets/**/*.{png,jpg,jpeg,svg,ttf,otf}; do
+          BASENAME=$(basename "$f" | tr -c 'a-zA-Z0-9_' '_')
+          BASENAME="${BASENAME%.*}"
+          ./file_to_c "$f" "$BASENAME" \
+            android/app/src/main/cassets/${BASENAME}.c \
+            android/app/src/main/cassets/${BASENAME}.h
+        done
+
+    # ---------- Copy shaders ----------
+    - name: Copy shaders
+      run: |
+        mkdir -p android/app/src/main/cshaders
         cp -r assets/shaders/* android/app/src/main/cshaders/ || true
+
+    # ---------- Copy patches ----------
+    - name: Copy patches
+      run: |
+        mkdir -p android/app/src/main/cpatches
         cp -r patches/* android/app/src/main/cpatches/ || true
 
     # ---------- Generate launcher icons ----------
@@ -80,12 +107,14 @@ jobs:
         declare -A SIZES=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
         for dpi in "${!SIZES[@]}"; do
           mkdir -p android/app/src/main/res/mipmap-$dpi
-          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} android/app/src/main/res/mipmap-$dpi/ic_launcher.png
-          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} android/app/src/main/res/mipmap-$dpi/ic_launcher_round.png
+          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} \
+            android/app/src/main/res/mipmap-$dpi/ic_launcher.png
+          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} \
+            android/app/src/main/res/mipmap-$dpi/ic_launcher_round.png
         done
 
     # ---------- Patch RT64 CMakeLists for Android ----------
-    - name: Patch RT64 CMakeLists
+    - name: Patch RT64 CMakeLists for Android
       run: |
         RT64_CMAKE=lib/rt64/CMakeLists.txt
         cp "$RT64_CMAKE" "$RT64_CMAKE.backup"
@@ -97,16 +126,22 @@ jobs:
         sed -i '/target_include_directories.*SDL2/s/^/# /' "$RT64_CMAKE"
         sed -i '/target_include_directories.*NFD/s/^/# /' "$RT64_CMAKE"
         sed -i '/target_link_libraries.*NFD/s/^/# /' "$RT64_CMAKE"
+        diff -u "$RT64_CMAKE.backup" "$RT64_CMAKE" || true
 
-    # ---------- Build RmlUi for each ABI ----------
-    - name: Build RmlUi per ABI
+    # ---------- Build RmlUi for multiple ABIs ----------
+    - name: Build RmlUi
       run: |
         ABIS=("arm64-v8a" "armeabi-v7a" "x86" "x86_64")
         for ABI in "${ABIS[@]}"; do
           BUILD_DIR=build-rmlui-$ABI
           mkdir -p "$BUILD_DIR"
           cd "$BUILD_DIR"
-          cmake ../android/RmlUi -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake -DANDROID_ABI=$ABI -DANDROID_PLATFORM=android-34 -DCMAKE_BUILD_TYPE=Release
+          cmake ../android/RmlUi \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=$ABI \
+            -DANDROID_PLATFORM=android-34 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFREETYPE_ROOT=../android/freetype
           cmake --build . -- -j$(nproc)
           mkdir -p ../../android/app/src/main/jniLibs/$ABI
           cp Source/libRmlUi.so ../../android/app/src/main/jniLibs/$ABI/
