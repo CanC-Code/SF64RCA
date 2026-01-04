@@ -1,10 +1,9 @@
 #include "AndroidRT64Wrapper.h"
 #include <SDL.h>
 #include <android/log.h>
-#include <cstring>
-
 #include "ultramodern/ultramodern.hpp"
 #include "zelda_render.h"
+#include <cstring>
 
 #define LOG_TAG "AndroidRT64Wrapper"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -18,7 +17,12 @@ AndroidRT64Wrapper::~AndroidRT64Wrapper() {
     shutdown();
 }
 
-bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
+void AndroidRT64Wrapper::setBackend(RendererBackend backend) {
+    std::lock_guard<std::mutex> lock(mutex);
+    selectedBackend = backend;
+}
+
+bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height, RendererBackend backend) {
     std::lock_guard<std::mutex> lock(mutex);
     if (initialized) return true;
     if (!window) {
@@ -26,43 +30,41 @@ bool AndroidRT64Wrapper::initialize(SDL_Window* window, int width, int height) {
         return false;
     }
 
-    // -------------------------------
-    // Vulkan assertion
-    // -------------------------------
-    if (!SDL_Vulkan_LoadLibrary(nullptr)) {
-        LOGE("Vulkan not available on this device");
-        return false;
-    }
-    LOGI("Vulkan loader OK");
-
     sdlWindow = window;
     surfaceWidth = width;
     surfaceHeight = height;
 
+    selectedBackend = backend;
+
     ultramodern::renderer::WindowHandle window_handle{};
     window_handle.window = window;
 
-    // Allocate RDRAM dynamically
-    rdram = std::make_unique<uint8_t[]>(0x4000000); // 64MB
+    // Allocate RDRAM dynamically (64 MB)
+    rdram = std::make_unique<uint8_t[]>(0x4000000);
     std::memset(rdram.get(), 0, 0x4000000);
 
-    // Create render context with Vulkan
-    renderContext = zelda64::renderer::create_render_context(rdram.get(), window_handle, true);
+    // Enforce Vulkan for now
+    bool useVulkan = (selectedBackend == RendererBackend::Vulkan || selectedBackend == RendererBackend::Auto);
+
+    renderContext = zelda64::renderer::create_render_context(
+        rdram.get(),
+        window_handle,
+        useVulkan
+    );
+
     if (!renderContext) {
-        LOGE("Failed to create RT64 Vulkan context");
+        LOGE("Failed to create RT64Context");
         rdram.reset();
         return false;
     }
 
     auto& config = ultramodern::renderer::get_graphics_config();
-    config.backend = ultramodern::renderer::Backend::Vulkan;
-    config.manual_width = width;
-    config.manual_height = height;
-
     renderContext->update_config(config, config);
 
     initialized = true;
-    LOGI("RT64 Vulkan context initialized (%dx%d)", width, height);
+    LOGI("RT64Context initialized (%dx%d) with backend %s", width, height,
+         useVulkan ? "Vulkan" : "OpenGLES");
+
     return true;
 }
 
@@ -79,7 +81,7 @@ void AndroidRT64Wrapper::resize(int width, int height) {
     config.manual_height = height;
 
     renderContext->update_config(config, config);
-    LOGI("RT64 resized to %dx%d", width, height);
+    LOGI("RT64Context resized to %dx%d", width, height);
 }
 
 void AndroidRT64Wrapper::renderFrame() {
@@ -119,7 +121,7 @@ void AndroidRT64Wrapper::shutdown() {
     sdlWindow = nullptr;
     initialized = false;
 
-    LOGI("RT64 Vulkan context shutdown complete");
+    LOGI("RT64Context shutdown complete");
 }
 
 bool AndroidRT64Wrapper::isInitialized() const {
