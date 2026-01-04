@@ -48,7 +48,7 @@ if(NOT TARGET SDL2::SDL2)
 endif()
 
 # -------------------------------
-# Force-disable NativeFileDialog for Android
+# Disable NativeFileDialog for Android
 # -------------------------------
 set(BUILD_NFD OFF CACHE BOOL "" FORCE)
 set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
@@ -57,7 +57,7 @@ set(NFD_BUILD OFF CACHE BOOL "" FORCE)
 # -------------------------------
 # External libraries
 # -------------------------------
-# RT64 (NFD disabled)
+# RT64
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 set(BUILD_SHARED_LIBS OFF)
 
@@ -96,20 +96,22 @@ target_include_directories(RecompiledFuncs PRIVATE
 # -------------------------------
 # PatchesLib Library
 # -------------------------------
-add_library(PatchesLib STATIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches.c
-)
-target_compile_options(PatchesLib PRIVATE
-    -fno-strict-aliasing
-    -Wno-unused-variable
-    -Wno-implicit-function-declaration
-)
-target_include_directories(PatchesLib PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/ultramodern/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/librecomp/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/N64Recomp/include
-)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches.c)
+    add_library(PatchesLib STATIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches.c
+    )
+    target_compile_options(PatchesLib PRIVATE
+        -fno-strict-aliasing
+        -Wno-unused-variable
+        -Wno-implicit-function-declaration
+    )
+    target_include_directories(PatchesLib PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/ultramodern/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/librecomp/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/N64ModernRuntime/N64Recomp/include
+    )
+endif()
 
 # -------------------------------
 # Main game sources
@@ -117,7 +119,7 @@ target_include_directories(PatchesLib PRIVATE
 file(GLOB_RECURSE GAME_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/main/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/game/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/ui/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../src/ui/**/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src/platform/android/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../rsp/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/RmlUi/Backends/*.cpp
@@ -128,9 +130,9 @@ file(GLOB_RECURSE GAME_SOURCES
 # -------------------------------
 set(GENERATED_SOURCES "")
 set(GENERATED_DIRS
-    "${CMAKE_CURRENT_SOURCE_DIR}/../build/generated/cshaders"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../build/generated/cmods"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../build/generated/cpatches"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cpatches"
 )
 
 foreach(dir ${GENERATED_DIRS})
@@ -167,7 +169,7 @@ target_include_directories(starfox64recompiled PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/rt64/src/render
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/freetype-windows-binaries/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/SlotMap
-    ${CMAKE_BINARY_DIR}/shaders
+    ${CMAKE_CURRENT_BINARY_DIR}/shaders
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cshaders
     ${CMAKE_CURRENT_SOURCE_DIR}/../app/src/main/cmods
