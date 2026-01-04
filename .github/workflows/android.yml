@@ -141,7 +141,7 @@ jobs:
     # ------------------------------------------------------------
     - name: Patch RmlUi CMakeLists for Android
       run: |
-        RMLUI_CMAKE=android/rmlui/CMakeLists.txt
+        RMLUI_CMAKE=android/RmlUi/CMakeLists.txt
         cp "$RMLUI_CMAKE" "$RMLUI_CMAKE.bak"
 
         # Insert Android-specific configuration after 'project(...)' line
