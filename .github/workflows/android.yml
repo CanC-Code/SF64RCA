@@ -156,6 +156,24 @@ jobs:
         else
           echo "⚠️  nativefiledialog not found at expected location"
         fi
+    
+    # ---------- Patch rt64 to work with FetchContent SDL2 ----------
+    - name: Patch rt64 CMakeLists.txt for Android SDL2
+      run: |
+        RT64_CMAKE="lib/rt64/CMakeLists.txt"
+        
+        if [ -f "$RT64_CMAKE" ]; then
+          echo "Patching rt64 CMakeLists.txt to use FetchContent SDL2 on Android..."
+          
+          cp "$RT64_CMAKE" "$RT64_CMAKE.bak"
+          
+          # Replace find_package(SDL2) with a conditional that works with FetchContent
+          sed -i 's/find_package(SDL2 REQUIRED)/if(NOT TARGET SDL2::SDL2)\n    find_package(SDL2 REQUIRED)\nendif()/' "$RT64_CMAKE"
+          
+          echo "✓ Patched rt64 to work with FetchContent SDL2"
+        else
+          echo "⚠️  rt64 CMakeLists.txt not found"
+        fi
 
     # ---------- file_to_c utility ----------
     - name: Build file_to_c
