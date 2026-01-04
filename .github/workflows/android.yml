@@ -95,110 +95,18 @@ jobs:
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
 
-    # ---------- Setup Android build structure ----------
-    - name: Setup Android build structure
-      run: |
-        # Verify CMakeLists.txt location
-        if [ -f android/app/CMakeLists.txt ]; then
-          echo "✓ CMakeLists.txt found in android/app/"
-        elif [ -f android/CMakeLists.txt ]; then
-          echo "Copying CMakeLists.txt from android/ to android/app/"
-          cp android/CMakeLists.txt android/app/
-        else
-          echo "ERROR: CMakeLists.txt not found in android/ directory"
-          ls -la android/
-          exit 1
-        fi
-        
-        # Create symlinks to lib directories that CMake needs
-        # The Android CMakeLists.txt uses paths like ../lib/rt64
-        # So from android/app/, ../lib should point to the root lib/
-        if [ ! -L android/lib ]; then
-          echo "Creating symlink: android/lib -> ../lib"
-          ln -s ../lib android/lib
-        fi
-        
-        # Verify the lib directories are accessible
-        echo "Verifying library access from android/app/:"
-        ls -la android/lib/ || echo "WARNING: android/lib symlink may not be working"
-        
-        # Also create symlinks for other directories that might be needed
-        for dir in include RecompiledFuncs RecompiledPatches patches rsp src; do
-          if [ -d "$dir" ] && [ ! -L "android/$dir" ]; then
-            echo "Creating symlink: android/$dir -> ../$dir"
-            ln -s ../$dir android/$dir
-          fi
-        done
-        
-        echo "Build structure setup complete"
-
-    # ---------- Verify Android CMakeLists.txt ----------
-    - name: Verify Android CMakeLists.txt has NFD disabled
-      run: |
-        CMAKE_FILE="android/CMakeLists.txt"
-        
-        if [ ! -f "$CMAKE_FILE" ]; then
-          echo "ERROR: $CMAKE_FILE not found"
-          ls -la android/
-          exit 1
-        fi
-        
-        echo "=== Checking if NFD is disabled ==="
-        
-        # Check if NFD disable flags are present BEFORE rt64 is included
-        if grep -B 10 "add_subdirectory.*rt64" "$CMAKE_FILE" | grep -q "BUILD_NFD.*OFF"; then
-          echo "✅ BUILD_NFD is set to OFF before rt64"
-        else
-          echo "⚠️  BUILD_NFD not found before rt64 - adding it"
-          
-          # Create a backup
-          cp "$CMAKE_FILE" "${CMAKE_FILE}.bak"
-          
-          # Add NFD disable flags before the rt64 line
-          sed -i '/add_subdirectory.*rt64/i \
-# Force-disable NativeFileDialog for Android\
-set(BUILD_NFD OFF CACHE BOOL "" FORCE)\
-set(NFD_PORTAL OFF CACHE BOOL "" FORCE)\
-set(NFD_BUILD OFF CACHE BOOL "" FORCE)\
-' "$CMAKE_FILE"
-          
-          echo "✅ Added NFD disable flags"
-        fi
-        
-        echo ""
-        echo "=== CMakeLists.txt NFD and rt64 section ==="
-        grep -A 3 -B 3 "BUILD_NFD\|rt64" "$CMAKE_FILE" || echo "Pattern not found"
-        
-        echo ""
-        echo "✅ CMakeLists.txt verification complete"
-    
-    # ---------- Patch nativefiledialog CMakeLists.txt for Android ----------
+    # ---------- Patch nativefiledialog for Android ----------
     - name: Patch nativefiledialog-extended for Android
       run: |
         NFD_CMAKE="lib/rt64/src/contrib/nativefiledialog-extended/src/CMakeLists.txt"
         
-        if [ ! -f "$NFD_CMAKE" ]; then
-          echo "⚠️  WARNING: nativefiledialog CMakeLists.txt not found at $NFD_CMAKE"
-          echo "Searching for it..."
-          find lib -name "CMakeLists.txt" -path "*/nativefiledialog*" || echo "Not found anywhere"
-          echo "This might be okay if rt64 has a different structure"
-          exit 0  # Don't fail the build, just warn
-        fi
-        
-        echo "Found nativefiledialog CMakeLists.txt"
-        echo ""
-        echo "=== Original content (first 30 lines) ==="
-        head -n 30 "$NFD_CMAKE"
-        
-        # Create backup
-        cp "$NFD_CMAKE" "$NFD_CMAKE.bak"
-        
-        echo ""
-        echo "=== Wrapping GTK detection in Android guard ==="
-        
-        # Wrap the entire file in an Android check if it tries to use pkg_check_modules
-        if grep -q "pkg_check_modules" "$NFD_CMAKE"; then
-          # Create a patched version that skips GTK on Android
+        if [ -f "$NFD_CMAKE" ]; then
+          echo "Found nativefiledialog CMakeLists.txt, patching for Android..."
+          
+          # Create backup
+          cp "$NFD_CMAKE" "$NFD_CMAKE.bak"
+          
+          # Add Android guard at the top of the file
           cat > "$NFD_CMAKE.new" << 'EOFPATCH'
 # Guard against building on Android
 if(ANDROID)
@@ -207,48 +115,12 @@ if(ANDROID)
 endif()
 
 EOFPATCH
-          # Append the original content
           cat "$NFD_CMAKE.bak" >> "$NFD_CMAKE.new"
           mv "$NFD_CMAKE.new" "$NFD_CMAKE"
           
-          echo "✅ Added Android guard at the top of the file"
+          echo "✓ Added Android guard to nativefiledialog"
         else
-          echo "⚠️  No pkg_check_modules found - file might have different structure"
-        fi
-        
-        echo ""
-        echo "=== Patched content (first 35 lines) ==="
-        head -n 35 "$NFD_CMAKE"
-        
-        echo ""
-        echo "✅ nativefiledialog patch complete"
-
-    # ---------- Fix JNI function signature ----------
-    - name: Fix JNI function signature
-      run: |
-        SDL_MAIN="android/app/src/main/cpp/SDL_main.cpp"
-        
-        if [ ! -f "$SDL_MAIN" ]; then
-          echo "WARNING: SDL_main.cpp not found at expected location"
-          echo "Looking for SDL_main.cpp..."
-          find android -name "SDL_main.cpp" || echo "SDL_main.cpp not found"
-        else
-          echo "Checking JNI function signature in SDL_main.cpp..."
-          
-          # Check if the JNI function exists and has the correct package name
-          if grep -q "Java_com_canc_code_starfox_MainActivity_pickRom" "$SDL_MAIN"; then
-            echo "Found incorrect JNI function name"
-            echo "Fixing package name: com.canc.code.starfox -> com.canc.starfox64"
-            
-            # Fix the JNI function name to match the Kotlin package
-            sed -i 's/Java_com_canc_code_starfox_MainActivity_pickRom/Java_com_canc_starfox64_MainActivity_pickRom/g' "$SDL_MAIN"
-            
-            echo "✓ JNI function signature corrected"
-          elif grep -q "Java_com_canc_starfox64_MainActivity_pickRom" "$SDL_MAIN"; then
-            echo "✓ JNI function signature is already correct"
-          else
-            echo "WARNING: Could not find pickRom JNI function"
-          fi
+          echo "WARNING: nativefiledialog CMakeLists.txt not found, skipping patch"
         fi
 
     # ---------- file_to_c utility ----------
