@@ -1,245 +1,142 @@
 cmake_minimum_required(VERSION 3.22)
-project(Starfox64Recompiled LANGUAGES C CXX)
 
-# ============================================================
-# Compiler standards
-# ============================================================
-set(CMAKE_C_STANDARD 17)
-set(CMAKE_C_STANDARD_REQUIRED ON)
+project(SF64RCA LANGUAGES C CXX)
+
+# ------------------------------------------------------------
+# Android / Toolchain sanity
+# ------------------------------------------------------------
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# ============================================================
-# Android configuration
-# ============================================================
-set(CMAKE_SYSTEM_NAME Android)
+# Let Gradle control STL — do NOT fight it
+# ANDROID_STL is passed as c++_static by Gradle
 
-if(NOT DEFINED CMAKE_ANDROID_ARCH_ABI)
-    set(CMAKE_ANDROID_ARCH_ABI arm64-v8a)
-endif()
+# ------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------
 
-# Match Gradle invocation (important)
-set(CMAKE_ANDROID_STL_TYPE c++_static)
+set(ROOT_DIR ${CMAKE_SOURCE_DIR}/..)
 
-# ============================================================
-# Output directories
-# ============================================================
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(SDL2_SOURCE_DIR        ${ROOT_DIR}/android/SDL2)
+set(LUNASVG_SOURCE_DIR    ${ROOT_DIR}/lib/lunasvg)
+set(RMLUI_SOURCE_DIR      ${ROOT_DIR}/lib/RmlUi)
+set(N64MR_SOURCE_DIR      ${ROOT_DIR}/lib/N64ModernRuntime)
+set(RT64_SOURCE_DIR       ${ROOT_DIR}/lib/rt64)
 
-# ============================================================
-# Global compile definitions
-# ============================================================
-add_compile_definitions(
-    ANDROID
-    SDL_MAIN_HANDLED
-    HLSL_CPU
-    RT64_STATIC
-    RT64_SDL_WINDOW_VULKAN
-    DEFER_ROM_PATCHES
-)
+# Binary dirs (required for out-of-tree add_subdirectory)
+set(SDL2_BINARY_DIR     ${CMAKE_BINARY_DIR}/SDL2)
+set(LUNASVG_BINARY_DIR  ${CMAKE_BINARY_DIR}/lunasvg)
+set(RMLUI_BINARY_DIR    ${CMAKE_BINARY_DIR}/rmlui)
+set(N64MR_BINARY_DIR    ${CMAKE_BINARY_DIR}/n64mr)
+set(RT64_BINARY_DIR     ${CMAKE_BINARY_DIR}/rt64)
 
-# ============================================================
-# SDL2 (Android)
-# ============================================================
-set(SDL2_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../android/SDL2")
+# ------------------------------------------------------------
+# SDL2 configuration (Android)
+# ------------------------------------------------------------
 
-if(NOT EXISTS "${SDL2_SOURCE_DIR}/CMakeLists.txt")
-    message(FATAL_ERROR "SDL2 source not found at ${SDL2_SOURCE_DIR}")
-endif()
+set(SDL_SHARED ON  CACHE BOOL "" FORCE)
+set(SDL_STATIC OFF CACHE BOOL "" FORCE)
 
-# SDL MUST build at least one library
-set(SDL_SHARED ON CACHE BOOL "Build SDL2 as shared library" FORCE)
-set(SDL_STATIC OFF CACHE BOOL "Disable SDL2 static library" FORCE)
-
-# Disable SDL extras we do not need
 set(SDL_TEST OFF CACHE BOOL "" FORCE)
 set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(${SDL2_SOURCE_DIR} SDL2_build)
+set(SDL_JOYSTICK ON CACHE BOOL "" FORCE)
+set(SDL_HAPTIC   ON CACHE BOOL "" FORCE)
+set(SDL_SENSOR   ON CACHE BOOL "" FORCE)
 
-# ============================================================
-# System libraries
-# ============================================================
-find_library(log-lib log)
-find_library(android-lib android)
-find_library(z-lib z)
-find_library(vulkan-lib vulkan)
+add_subdirectory(
+    ${SDL2_SOURCE_DIR}
+    ${SDL2_BINARY_DIR}
+)
 
-# ============================================================
-# Disable NativeFileDialog completely
-# ============================================================
-set(BUILD_NFD OFF CACHE BOOL "" FORCE)
-set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
-set(NFD_BUILD OFF CACHE BOOL "" FORCE)
+# ------------------------------------------------------------
+# lunasvg
+# ------------------------------------------------------------
 
-# ============================================================
-# External libraries
-# ============================================================
-
-# ---- RT64 (Vulkan-only) ----
-set(BUILD_SHARED_LIBS OFF)
-add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
-
-# ---- lunasvg ----
+set(LUNASVG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(LUNASVG_BUILD_TOOLS  OFF CACHE BOOL "" FORCE)
 set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/lunasvg)
 
-# ---- RmlUi ----
-set(RMLUI_SVG_PLUGIN ON CACHE BOOL "" FORCE)
-set(RMLUI_TESTS_ENABLED OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/RmlUi)
-target_compile_definitions(rmlui_core PRIVATE LUNASVG_BUILD_STATIC)
-
-# ---- N64ModernRuntime ----
-add_subdirectory(${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime)
-
-# ============================================================
-# RecompiledFuncs library
-# ============================================================
-file(GLOB FUNC_C_SOURCES
-    ${CMAKE_SOURCE_DIR}/../RecompiledFuncs/*.c
-)
-file(GLOB FUNC_CXX_SOURCES
-    ${CMAKE_SOURCE_DIR}/../RecompiledFuncs/*.cpp
+add_subdirectory(
+    ${LUNASVG_SOURCE_DIR}
+    ${LUNASVG_BINARY_DIR}
 )
 
-add_library(RecompiledFuncs STATIC
-    ${FUNC_C_SOURCES}
-    ${FUNC_CXX_SOURCES}
+# ------------------------------------------------------------
+# RmlUi
+# ------------------------------------------------------------
+
+set(RMLUI_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(RMLUI_BUILD_SAMPLES    OFF CACHE BOOL "" FORCE)
+set(RMLUI_BUILD_TESTS      OFF CACHE BOOL "" FORCE)
+set(RMLUI_BUILD_DOCS       OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(
+    ${RMLUI_SOURCE_DIR}
+    ${RMLUI_BINARY_DIR}
 )
 
-target_compile_options(RecompiledFuncs PRIVATE
-    -fno-strict-aliasing
-    -Wno-unused-variable
-    -Wno-implicit-function-declaration
+# ------------------------------------------------------------
+# N64ModernRuntime
+# ------------------------------------------------------------
+
+add_subdirectory(
+    ${N64MR_SOURCE_DIR}
+    ${N64MR_BINARY_DIR}
 )
 
-target_include_directories(RecompiledFuncs PRIVATE
-    ${CMAKE_SOURCE_DIR}/../include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/ultramodern/include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/librecomp/include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/N64Recomp/include
+# ------------------------------------------------------------
+# RT64
+# ------------------------------------------------------------
+
+# Avoid empty include_directories() inside RT64
+# by ensuring required paths exist
+set(RT64_ENABLE_VULKAN ON CACHE BOOL "" FORCE)
+set(RT64_ENABLE_D3D12  OFF CACHE BOOL "" FORCE)
+set(RT64_ENABLE_METAL  OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(
+    ${RT64_SOURCE_DIR}
+    ${RT64_BINARY_DIR}
 )
 
-# ============================================================
-# Optional PatchesLib
-# ============================================================
-if(EXISTS ${CMAKE_SOURCE_DIR}/../RecompiledPatches/patches.c)
-    add_library(PatchesLib STATIC
-        ${CMAKE_SOURCE_DIR}/../RecompiledPatches/patches.c
-        ${CMAKE_SOURCE_DIR}/../RecompiledPatches/patches_bin.c
-    )
+# ------------------------------------------------------------
+# Main native library
+# ------------------------------------------------------------
 
-    target_compile_options(PatchesLib PRIVATE
-        -fno-strict-aliasing
-        -Wno-unused-variable
-        -Wno-implicit-function-declaration
-    )
-
-    target_include_directories(PatchesLib PRIVATE
-        ${CMAKE_SOURCE_DIR}/../include
-        ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/ultramodern/include
-        ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/librecomp/include
-        ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/N64Recomp/include
-    )
-endif()
-
-# ============================================================
-# Main sources
-# ============================================================
-file(GLOB_RECURSE GAME_SOURCES
-    ${CMAKE_SOURCE_DIR}/../src/main/*.cpp
-    ${CMAKE_SOURCE_DIR}/../src/game/*.cpp
-    ${CMAKE_SOURCE_DIR}/../src/ui/*.cpp
-    ${CMAKE_SOURCE_DIR}/../src/platform/android/*.cpp
-    ${CMAKE_SOURCE_DIR}/../rsp/*.cpp
-    ${CMAKE_SOURCE_DIR}/../lib/RmlUi/Backends/*.cpp
-)
-
-# SDL entry point
-list(APPEND GAME_SOURCES
-    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpp/SDL_main.cpp
-)
-
-# Android RT64 wrapper
-list(APPEND GAME_SOURCES
-    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpp/AndroidRT64Wrapper.cpp
-)
-
-# ============================================================
-# Generated C sources (shaders / mods / patches)
-# ============================================================
-set(GENERATED_SOURCES "")
-
-foreach(dir
-    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cshaders
-    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cmods
-    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpatches
-)
-    if(EXISTS ${dir})
-        file(GLOB _gen "${dir}/*.c")
-        list(APPEND GENERATED_SOURCES ${_gen})
-    endif()
-endforeach()
-
-# ============================================================
-# Main shared library
-# ============================================================
 add_library(starfox64recompiled SHARED
-    ${GAME_SOURCES}
-    ${GENERATED_SOURCES}
+    ../src/main/cpp/native-lib.cpp
 )
 
-# ============================================================
-# Include directories
-# ============================================================
 target_include_directories(starfox64recompiled PRIVATE
-    ${CMAKE_SOURCE_DIR}/../include
-    ${CMAKE_SOURCE_DIR}/../lib/N64ModernRuntime/N64Recomp/include
-    ${CMAKE_SOURCE_DIR}/../lib/concurrentqueue
-    ${CMAKE_SOURCE_DIR}/../lib/GamepadMotionHelpers
-    ${CMAKE_SOURCE_DIR}/../lib/RmlUi/Include
-    ${CMAKE_SOURCE_DIR}/../lib/RmlUi/Backends
-    ${CMAKE_SOURCE_DIR}/../lib/SlotMap
-    ${CMAKE_BINARY_DIR}
-    ${SDL2_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src/rhi
-    ${CMAKE_SOURCE_DIR}/../lib/rt64/src/render
-    ${CMAKE_SOURCE_DIR}/../android/app/src/main/cpp
+    ${ROOT_DIR}/src
 )
 
-# ============================================================
-# Compiler options
-# ============================================================
-target_compile_options(starfox64recompiled PRIVATE
-    -fno-strict-aliasing
-    -Wno-unused-variable
-    -Wno-implicit-function-declaration
-)
-
-# ============================================================
-# Link libraries
-# ============================================================
-target_link_libraries(starfox64recompiled PRIVATE
-    RecompiledFuncs
-    rt64
-    librecomp
-    ultramodern
-    RmlUi::Core
-    RmlUi::Debugger
-    lunasvg
+target_link_libraries(starfox64recompiled
     SDL2
-    ${log-lib}
-    ${android-lib}
-    ${z-lib}
-    ${vulkan-lib}
+    SDL2main
+
+    lunasvg
+
+    rmlui_core
+
+    n64modernruntime
+
+    rt64
+
+    android
+    log
+    EGL
+    GLESv2
 )
 
-if(TARGET PatchesLib)
-    target_link_libraries(starfox64recompiled PRIVATE PatchesLib)
-endif()
+# ------------------------------------------------------------
+# Android-specific defines
+# ------------------------------------------------------------
+
+target_compile_definitions(starfox64recompiled PRIVATE
+    ANDROID
+    SF64_ANDROID
+)
