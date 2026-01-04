@@ -228,18 +228,27 @@ jobs:
       run: |
         NFD_DIR="lib/rt64/src/contrib/nativefiledialog-extended/src"
         CMAKE_FILE="$NFD_DIR/CMakeLists.txt"
-        
+
         if [ -f "$CMAKE_FILE" ]; then
           echo "Patching CMakeLists.txt to skip GTK detection on Android..."
-          # Replace GTK check with a proper Android guard
-          sed -i '/pkg_check_modules(GTK3 gtk+-3.0)/c\if(NOT ANDROID)\n  pkg_check_modules(GTK3 gtk+-3.0)\nendif()' "$CMAKE_FILE"
 
-          # ---------- Verify patch applied ----------
           if ! grep -q "if(NOT ANDROID)" "$CMAKE_FILE"; then
+            awk '
+              /pkg_check_modules\(GTK3 gtk\+-3\.0\)/ {
+                print "if(NOT ANDROID)"
+                print $0
+                print "endif()"
+                next
+              }
+              { print }
+            ' "$CMAKE_FILE" > "$CMAKE_FILE.tmp" && mv "$CMAKE_FILE.tmp" "$CMAKE_FILE"
+          fi
+
+          if grep -q "if(NOT ANDROID)" "$CMAKE_FILE"; then
+            echo "GTK patch verified ✅"
+          else
             echo "ERROR: GTK patch for Android was not applied correctly!"
             exit 1
-          else
-            echo "GTK patch verified ✅"
           fi
         else
           echo "WARNING: CMakeLists.txt not found at $CMAKE_FILE"
