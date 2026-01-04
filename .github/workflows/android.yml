@@ -14,7 +14,6 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/27.3.137507
       JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
       JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
 
@@ -48,10 +47,11 @@ jobs:
         git submodule status
         if [ ! -f "android/SDL2/CMakeLists.txt" ]; then
           echo "✗ SDL2 submodule missing or not initialized"
+          echo "Contents of android/:"
           ls -la android || true
           exit 1
         fi
-        echo "✓ SDL2 submodule present"
+        echo "✓ SDL2 submodule present and valid"
 
     # ---------- Install ImageMagick ----------
     - name: Install ImageMagick
@@ -128,7 +128,20 @@ jobs:
         sed -i '/target_link_libraries.*NFD/s/^/# /' "$RT64_CMAKE"
         diff -u "$RT64_CMAKE.backup" "$RT64_CMAKE" || true
 
-    # ---------- Build RmlUi + FreeType for multiple ABIs ----------
+    # ---------- Inject FreeType into RmlUi CMake dynamically ----------
+    - name: Inject FreeType into RmlUi CMake
+      run: |
+        RMLUI_CMAKE=android/RmlUi/CMakeLists.txt
+        echo "Patching $RMLUI_CMAKE to include FreeType..."
+        cp "$RMLUI_CMAKE" "$RMLUI_CMAKE.backup"
+        awk '{
+          print $0
+          if ($1=="project(") print "add_subdirectory(freetype)"
+        }' "$RMLUI_CMAKE" > "$RMLUI_CMAKE.patched"
+        mv "$RMLUI_CMAKE.patched" "$RMLUI_CMAKE"
+        echo "✅ FreeType submodule injected"
+
+    # ---------- Build RmlUi for multiple ABIs ----------
     - name: Build RmlUi
       run: |
         ABIS=("arm64-v8a" "armeabi-v7a" "x86" "x86_64")
@@ -136,16 +149,12 @@ jobs:
           BUILD_DIR=build-rmlui-$ABI
           mkdir -p "$BUILD_DIR"
           cd "$BUILD_DIR"
-          
-          # Build RmlUi with FreeType as subdirectory
           cmake ../android/RmlUi \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=$ABI \
             -DANDROID_PLATFORM=android-34 \
             -DCMAKE_BUILD_TYPE=Release
-          
           cmake --build . -- -j$(nproc)
-          
           mkdir -p ../../android/app/src/main/jniLibs/$ABI
           cp Source/libRmlUi.so ../../android/app/src/main/jniLibs/$ABI/
           cd ..
@@ -177,4 +186,4 @@ jobs:
         name: build-logs
         path: |
           android/app/build/
-          build_rmlui-*
+          build_rt64/
