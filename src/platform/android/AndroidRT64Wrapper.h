@@ -16,7 +16,7 @@ namespace SF64RCA {
  * AndroidRT64Wrapper
  *
  * Bridges SDL window management and the RT64 renderer on Android.
- * Manages the RT64Context lifecycle and exposes basic render, resize, and shutdown operations.
+ * Manages the RT64Context lifecycle and exposes basic render, resize, ROM load, and shutdown operations.
  */
 class AndroidRT64Wrapper {
 public:
@@ -42,6 +42,11 @@ public:
      * Render a single frame.
      */
     void renderFrame();
+
+    /**
+     * Load a ROM into RDRAM. Returns false if size exceeds 64MB.
+     */
+    bool loadRom(const uint8_t* data, size_t size);
 
     /**
      * Shut down RT64 cleanly.
