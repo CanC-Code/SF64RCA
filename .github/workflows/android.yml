@@ -47,7 +47,6 @@ jobs:
         git submodule status
         if [ ! -f "android/SDL2/CMakeLists.txt" ]; then
           echo "✗ SDL2 submodule missing or not initialized"
-          echo "Contents of android/:"
           ls -la android || true
           exit 1
         fi
@@ -128,18 +127,18 @@ jobs:
         sed -i '/target_link_libraries.*NFD/s/^/# /' "$RT64_CMAKE"
         diff -u "$RT64_CMAKE.backup" "$RT64_CMAKE" || true
 
-    # ---------- Inject FreeType into RmlUi CMake dynamically ----------
+    # ---------- Inject FreeType into RmlUi CMake ----------
     - name: Inject FreeType into RmlUi CMake
       run: |
         RMLUI_CMAKE=android/RmlUi/CMakeLists.txt
-        echo "Patching $RMLUI_CMAKE to include FreeType..."
+        echo "Patching $RMLUI_CMAKE to use submodule FreeType..."
         cp "$RMLUI_CMAKE" "$RMLUI_CMAKE.backup"
         awk '{
           print $0
-          if ($1=="project(") print "add_subdirectory(freetype)"
+          if ($1=="project(") print "set(FREETYPE_ROOT \"${CMAKE_CURRENT_LIST_DIR}/../freetype\")\nset(USE_SYSTEM_FREETYPE OFF)"
         }' "$RMLUI_CMAKE" > "$RMLUI_CMAKE.patched"
         mv "$RMLUI_CMAKE.patched" "$RMLUI_CMAKE"
-        echo "✅ FreeType submodule injected"
+        echo "✅ FreeType submodule integrated"
 
     # ---------- Build RmlUi for multiple ABIs ----------
     - name: Build RmlUi
@@ -153,7 +152,9 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=$ABI \
             -DANDROID_PLATFORM=android-34 \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFREETYPE_ROOT=../android/freetype \
+            -DUSE_SYSTEM_FREETYPE=OFF
           cmake --build . -- -j$(nproc)
           mkdir -p ../../android/app/src/main/jniLibs/$ABI
           cp Source/libRmlUi.so ../../android/app/src/main/jniLibs/$ABI/
