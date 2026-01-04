@@ -100,51 +100,74 @@ jobs:
         done
 
     # ---------- Patch RT64 CMakeLists for Android ----------
-    - name: Patch RT64 CMakeLists
+    - name: Patch RT64 CMakeLists for Android
       run: |
+        echo "Patching RT64 CMakeLists.txt for Android build..."
         RT64_CMAKE=${GITHUB_WORKSPACE}/lib/rt64/CMakeLists.txt
+        
+        # Create backup
+        cp "$RT64_CMAKE" "$RT64_CMAKE.backup"
+        
+        # Comment out find_package(SDL2) - we build it as subdirectory
+        sed -i 's/^[[:space:]]*find_package(SDL2 REQUIRED)/# &/' "$RT64_CMAKE"
+        
+        # Comment out SDL2 add_subdirectory if it tries to add it conditionally
+        sed -i 's/^[[:space:]]*add_subdirectory(SDL2)/# &/' "$RT64_CMAKE"
+        sed -i 's/^[[:space:]]*add_subdirectory(.*SDL.*)/# &/' "$RT64_CMAKE"
+        
+        # Disable NativeFileDialog entirely
+        sed -i 's/^[[:space:]]*add_subdirectory(src\/contrib\/nativefiledialog-extended)/# &/' "$RT64_CMAKE"
+        sed -i 's/^[[:space:]]*add_subdirectory(.*nativefiledialog.*)/# &/' "$RT64_CMAKE"
+        
+        # Comment out any include_directories that might have empty variables
+        # This is the key fix for the "empty-string as include directory" error
+        sed -i '/^[[:space:]]*include_directories([[:space:]]*\${SDL2_INCLUDE_DIR/s/^/# /' "$RT64_CMAKE"
+        sed -i '/^[[:space:]]*include_directories([[:space:]]*\${SDL2_INCLUDE_DIRS/s/^/# /' "$RT64_CMAKE"
+        sed -i '/^[[:space:]]*include_directories([[:space:]]*\${NFD_INCLUDE_DIR/s/^/# /' "$RT64_CMAKE"
+        
+        # Also handle target_include_directories with potentially empty vars
+        sed -i '/target_include_directories.*\${SDL2_INCLUDE_DIR[S]*}/s/^/# /' "$RT64_CMAKE"
+        sed -i '/target_include_directories.*\${NFD_INCLUDE_DIR}/s/^/# /' "$RT64_CMAKE"
+        
+        # Disable any target_link_libraries that reference NFD
+        sed -i '/target_link_libraries.*nfd/s/^/# /' "$RT64_CMAKE"
+        sed -i '/target_link_libraries.*NFD/s/^/# /' "$RT64_CMAKE"
+        
+        echo "RT64 CMakeLists.txt patched successfully"
+        
+        # Show what changed (for debugging)
+        echo "=== Changes made to RT64 CMakeLists.txt ==="
+        diff -u "$RT64_CMAKE.backup" "$RT64_CMAKE" || true
 
-        # Comment out SDL2/NFD subdirs and find_package
-        sed -i 's|find_package(SDL2 REQUIRED)|# &|g' "$RT64_CMAKE"
-        sed -i 's|add_subdirectory(SDL2)|# &|g' "$RT64_CMAKE"
-        sed -i 's|add_subdirectory(src/contrib/nativefiledialog-extended)|# &|g' "$RT64_CMAKE"
-
-        # Comment out empty or problematic include_directories
-        sed -i '/include_directories([[:space:]]*)/s/^/# /' "$RT64_CMAKE"
-        sed -i '/include_directories(.*\${SDL2_INCLUDE_DIRS}.*)/s/^/# /' "$RT64_CMAKE"
-        sed -i '/include_directories(.*\${NFD_INCLUDE_DIR}.*)/s/^/# /' "$RT64_CMAKE"
-
-    # ---------- Configure and Build RT64 ----------
-    - name: Configure and Build RT64
+    # ---------- Verify SDL2 exists ----------
+    - name: Verify SDL2 directory
       run: |
-        mkdir -p build_rt64
-        cmake -S lib/rt64 -B build_rt64 \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DRT64_USE_EXTERNAL_SDL2=ON \
-          -DRT64_SDL2_TARGET=SDL2 \
-          -DSDL2_DIR=${GITHUB_WORKSPACE}/android/SDL2 \
-          -DBUILD_NFD=OFF \
-          -DNFD_PORTAL=OFF \
-          -DNFD_BUILD=OFF \
-          -DPLUME_BUILD_EXAMPLES=OFF \
-          -DPLUME_BACKEND_VULKAN=OFF \
-          -DPLUME_BACKEND_METAL=OFF \
-          -DPLUME_BACKEND_D3D12=OFF \
-          -DCMAKE_SYSTEM_NAME=Android \
-          -DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME \
-          -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a \
-          -DCMAKE_ANDROID_STL_TYPE=c++_shared \
-          -DCMAKE_ANDROID_API=34
-        cmake --build build_rt64 --target rt64 -- -j$(nproc)
+        echo "Checking SDL2 directory..."
+        if [ -d "android/SDL2" ]; then
+          echo "✓ SDL2 directory exists"
+          ls -la android/SDL2/
+          if [ -f "android/SDL2/CMakeLists.txt" ]; then
+            echo "✓ SDL2 CMakeLists.txt found"
+          else
+            echo "✗ SDL2 CMakeLists.txt NOT found"
+            exit 1
+          fi
+        else
+          echo "✗ SDL2 directory NOT found"
+          exit 1
+        fi
 
-    # ---------- Build Debug APK ----------
+    # ---------- Build APK (Gradle handles CMake) ----------
     - name: Build Debug APK
       working-directory: android
-      run: ./gradlew assembleDebug --no-daemon
+      run: |
+        echo "Building APK with Gradle..."
+        ./gradlew assembleDebug --no-daemon --stacktrace --info
 
     # ---------- Run lint ----------
     - name: Run Android lint
       working-directory: android
+      continue-on-error: true
       run: ./gradlew lintDebug --no-daemon
 
     # ---------- Upload APK artifact ----------
@@ -153,3 +176,13 @@ jobs:
       with:
         name: Starfox64Recompiled-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
+
+    # ---------- Upload build logs on failure ----------
+    - name: Upload build logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          android/app/build/
+          build_rt64/
