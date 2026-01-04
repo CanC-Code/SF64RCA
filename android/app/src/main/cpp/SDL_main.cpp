@@ -46,14 +46,18 @@ int SDL_main(int argc, char* argv[]) {
         return -1;
     }
 
-    // Initialize RT64 wrapper with Vulkan
+    // Initialize RT64 wrapper with Vulkan backend
     rt64Wrapper = new SF64RCA::AndroidRT64Wrapper();
     if (!rt64Wrapper->initialize(window, 1280, 720, SF64RCA::RendererBackend::Vulkan)) {
         LOGE("Failed to initialize RT64 wrapper");
+        SDL_DestroyWindow(window);
+        SDL_Quit();
         return -1;
     }
 
-    // Main loop
+    // ------------------------
+    // Main SDL loop
+    // ------------------------
     SDL_Event event;
     bool running = true;
 
@@ -80,6 +84,7 @@ int SDL_main(int argc, char* argv[]) {
             }
         }
 
+        // Render frame
         if (rt64Wrapper && rt64Wrapper->isInitialized()) {
             rt64Wrapper->renderFrame();
         }
@@ -87,7 +92,9 @@ int SDL_main(int argc, char* argv[]) {
         SDL_GL_SwapWindow(window);
     }
 
+    // ------------------------
     // Cleanup
+    // ------------------------
     if (rt64Wrapper) {
         rt64Wrapper->shutdown();
         delete rt64Wrapper;
