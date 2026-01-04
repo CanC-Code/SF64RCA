@@ -72,7 +72,7 @@ jobs:
         echo "ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/27.3.13750724" >> $GITHUB_ENV
         echo "PATH=$HOME/Android/Sdk/platform-tools:$HOME/Android/Sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
 
-    # ---------- Accept all SDK licenses ----------
+    # ---------- Accept SDK licenses ----------
     - name: Accept Android SDK licenses
       run: yes | $HOME/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
@@ -87,24 +87,32 @@ jobs:
         sudo ln -sf /opt/cmake-${CMAKE_VERSION}/bin/cmake /usr/local/bin/cmake
         cmake --version
 
-    # ---------- local.properties ----------
+    # ---------- Configure local.properties ----------
     - name: Configure local.properties
       run: |
         mkdir -p android
         {
-          echo "sdk.dir=$ANDROID_HOME"
-          echo "ndk.dir=$ANDROID_NDK_HOME"
+          echo "sdk.dir=$HOME/Android/Sdk"
+          echo "ndk.dir=$HOME/Android/Sdk/ndk/27.3.13750724"
           echo "cmake.dir=/opt/cmake-3.27.3"
         } > android/local.properties
         cat android/local.properties
 
-    # ---------- Gradle permissions ----------
+    # ---------- Make gradlew executable ----------
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # ---------- CMakeLists ----------
-    - name: Copy Android CMakeLists.txt
-      run: cp android/CMakeLists.txt android/app/CMakeLists.txt
+    # ---------- Copy Android CMakeLists.txt ----------
+    - name: Copy CMakeLists.txt into app/
+      run: |
+        mkdir -p android/app
+        if [ -f android/CMakeLists.txt ]; then
+          cp android/CMakeLists.txt android/app/CMakeLists.txt
+          echo "✓ CMakeLists.txt copied into android/app/"
+        else
+          echo "ERROR: android/CMakeLists.txt not found"
+          exit 1
+        fi
 
     # ---------- Required directories ----------
     - name: Ensure Android directories exist
@@ -168,6 +176,7 @@ jobs:
         }
         EOF
         gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
+        chmod +x /usr/local/bin/file_to_c
 
     # ---------- Shaders ----------
     - name: Generate shader headers
