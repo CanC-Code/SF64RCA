@@ -104,16 +104,14 @@ jobs:
       run: |
         RT64_CMAKE=${GITHUB_WORKSPACE}/lib/rt64/CMakeLists.txt
 
-        # Disable SDL2 find_package and subdirectory
-        sed -i 's|find_package(SDL2 REQUIRED)|# find_package(SDL2 REQUIRED)|g' "$RT64_CMAKE"
-        sed -i 's|add_subdirectory(SDL2)|# add_subdirectory(SDL2)|g' "$RT64_CMAKE"
+        # Comment out SDL2 and NativeFileDialog
+        sed -i 's|find_package(SDL2 REQUIRED)|# &|g' "$RT64_CMAKE"
+        sed -i 's|add_subdirectory(SDL2)|# &|g' "$RT64_CMAKE"
+        sed -i 's|add_subdirectory(src/contrib/nativefiledialog-extended)|# &|g' "$RT64_CMAKE"
 
-        # Disable NativeFileDialog subdir to avoid GTK dependency
-        sed -i 's|add_subdirectory(src/contrib/nativefiledialog-extended)|# add_subdirectory(src/contrib/nativefiledialog-extended)|g' "$RT64_CMAKE"
-
-        # Patch include_directories to skip empty paths
-        sed -i '/include_directories(/!b;:a;s/\${SDL2_INCLUDE_DIRS}//;t;ba' "$RT64_CMAKE"
-        sed -i '/include_directories(\${.*})/s/^/# /' "$RT64_CMAKE"
+        # Comment out empty or problematic include_directories
+        sed -i '/include_directories(.*\${SDL2_INCLUDE_DIRS}.*)/s/^/# /' "$RT64_CMAKE"
+        sed -i '/include_directories(.*\${NFD_INCLUDE_DIR}.*)/s/^/# /' "$RT64_CMAKE"
 
     # ---------- Configure and Build RT64 ----------
     - name: Configure and Build RT64
@@ -127,12 +125,16 @@ jobs:
           -DBUILD_NFD=OFF \
           -DNFD_PORTAL=OFF \
           -DNFD_BUILD=OFF \
+          -DPLUME_BUILD_EXAMPLES=OFF \
+          -DPLUME_BACKEND_VULKAN=OFF \
+          -DPLUME_BACKEND_METAL=OFF \
+          -DPLUME_BACKEND_D3D12=OFF \
           -DCMAKE_SYSTEM_NAME=Android \
           -DCMAKE_ANDROID_NDK=$ANDROID_NDK_HOME \
           -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a \
           -DCMAKE_ANDROID_STL_TYPE=c++_shared \
           -DCMAKE_ANDROID_API=34
-        cmake --build build_rt64 --target rt64 -- -j$(nproc)
+        cmake --build build_rt64 --target rt64 -- -j1 VERBOSE=1
 
     # ---------- Build Debug APK ----------
     - name: Build Debug APK
