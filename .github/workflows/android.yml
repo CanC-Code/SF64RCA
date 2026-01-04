@@ -95,32 +95,66 @@ jobs:
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
 
+    # ---------- Setup Android build structure ----------
+    - name: Setup Android build structure
+      run: |
+        # Verify CMakeLists.txt location
+        if [ -f android/app/CMakeLists.txt ]; then
+          echo "✓ CMakeLists.txt found in android/app/"
+        elif [ -f android/CMakeLists.txt ]; then
+          echo "Copying CMakeLists.txt from android/ to android/app/"
+          cp android/CMakeLists.txt android/app/
+        else
+          echo "ERROR: CMakeLists.txt not found in android/ directory"
+          ls -la android/
+          exit 1
+        fi
+        
+        # Create symlinks to lib directories that CMake needs
+        if [ ! -L android/lib ]; then
+          echo "Creating symlink: android/lib -> ../lib"
+          ln -s ../lib android/lib
+        fi
+        
+        # Verify the lib directories are accessible
+        echo "Verifying library access from android/app/:"
+        ls -la android/lib/ || echo "WARNING: android/lib symlink may not be working"
+        
+        # Also create symlinks for other directories that might be needed
+        for dir in include RecompiledFuncs RecompiledPatches patches rsp src; do
+          if [ -d "$dir" ] && [ ! -L "android/$dir" ]; then
+            echo "Creating symlink: android/$dir -> ../$dir"
+            ln -s ../$dir android/$dir
+          fi
+        done
+        
+        echo "Build structure setup complete"
+
     # ---------- Patch nativefiledialog for Android ----------
     - name: Patch nativefiledialog-extended for Android
       run: |
         NFD_CMAKE="lib/rt64/src/contrib/nativefiledialog-extended/src/CMakeLists.txt"
         
         if [ -f "$NFD_CMAKE" ]; then
-          echo "Found nativefiledialog CMakeLists.txt, patching for Android..."
+          echo "Found nativefiledialog CMakeLists.txt"
+          echo "Patching to skip on Android..."
           
           # Create backup
           cp "$NFD_CMAKE" "$NFD_CMAKE.bak"
           
-          # Add Android guard at the top of the file
-          cat > "$NFD_CMAKE.new" << 'EOFPATCH'
-# Guard against building on Android
-if(ANDROID)
-    message(STATUS "Skipping nativefiledialog on Android (not supported)")
-    return()
-endif()
-
-EOFPATCH
+          # Add Android guard at the top
+          echo "# Guard against building on Android" > "$NFD_CMAKE.new"
+          echo "if(ANDROID)" >> "$NFD_CMAKE.new"
+          echo "    message(STATUS \"Skipping nativefiledialog on Android (not supported)\")" >> "$NFD_CMAKE.new"
+          echo "    return()" >> "$NFD_CMAKE.new"
+          echo "endif()" >> "$NFD_CMAKE.new"
+          echo "" >> "$NFD_CMAKE.new"
           cat "$NFD_CMAKE.bak" >> "$NFD_CMAKE.new"
           mv "$NFD_CMAKE.new" "$NFD_CMAKE"
           
           echo "✓ Added Android guard to nativefiledialog"
         else
-          echo "WARNING: nativefiledialog CMakeLists.txt not found, skipping patch"
+          echo "⚠️  nativefiledialog not found at expected location"
         fi
 
     # ---------- file_to_c utility ----------
