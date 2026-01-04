@@ -127,6 +127,22 @@ jobs:
 
         diff -u "$RT64_CMAKE.backup" "$RT64_CMAKE" || true
 
+    # ---------- Build RmlUi ----------
+    - name: Build RmlUi
+      run: |
+        mkdir -p build-rmlui
+        cd build-rmlui
+        cmake ../RmlUI
+        cmake --build . --config Release -- -j$(nproc)
+
+    # ---------- Copy RmlUi library to Android jniLibs ----------
+    - name: Copy RmlUi library to Android
+      run: |
+        echo "Copying RmlUi shared library to Android project..."
+        mkdir -p android/app/src/main/jniLibs/arm64-v8a
+        cp build-rmlui/Source/libRmlUi.so android/app/src/main/jniLibs/arm64-v8a/ || true
+        ls -la android/app/src/main/jniLibs/arm64-v8a/
+
     # ---------- Build APK ----------
     - name: Build Debug APK
       working-directory: android
