@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1)
 
+# -------------------------------
+# Project
+# -------------------------------
 project(Starfox64Recompiled LANGUAGES C CXX)
 
 # -------------------------------
@@ -10,17 +13,21 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# -------------------------------
+# Compile definitions
+# -------------------------------
+# These mirror desktop defines, adapted for Android
 add_compile_definitions(
-    ANDROID
-    SDL_MAIN_HANDLED
-    HLSL_CPU
-    RT64_STATIC
-    RT64_SDL_WINDOW_VULKAN
-    DEFER_ROM_PATCHES
+    ANDROID                      # Android build
+    SDL_MAIN_HANDLED              # SDL main handled manually
+    HLSL_CPU                      # Use CPU-based HLSL compilation
+    RT64_STATIC                   # Static RT64 library
+    RT64_SDL_WINDOW_VULKAN        # Use Vulkan window in RT64
+    DEFER_ROM_PATCHES             # Patch ROMs later
 )
 
 # -------------------------------
-# Android NDK settings
+# Android NDK / ABI
 # -------------------------------
 set(CMAKE_ANDROID_STL_TYPE c++_shared)
 if(NOT DEFINED CMAKE_ANDROID_ARCH_ABI)
@@ -35,7 +42,7 @@ find_library(android-lib android)
 find_library(z-lib z)
 
 # -------------------------------
-# Fetch SDL2 if not available
+# Fetch SDL2 if not already available
 # -------------------------------
 if(NOT TARGET SDL2::SDL2)
     include(FetchContent)
@@ -99,6 +106,7 @@ target_include_directories(RecompiledFuncs PRIVATE
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches.c)
     add_library(PatchesLib STATIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../RecompiledPatches/patches_bin.c
     )
     target_compile_options(PatchesLib PRIVATE
         -fno-strict-aliasing
@@ -143,8 +151,9 @@ foreach(dir ${GENERATED_DIRS})
 endforeach()
 
 # -------------------------------
-# Main shared library
+# Main shared library for APK
 # -------------------------------
+# Android does not use add_executable; Gradle builds APK and loads this .so
 add_library(starfox64recompiled SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/app/src/main/cpp/SDL_main.cpp
     ${GAME_SOURCES}
@@ -209,3 +218,13 @@ target_link_libraries(starfox64recompiled
 set_target_properties(starfox64recompiled PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 )
+
+# -------------------------------
+# Notes / Android adaptation:
+# - Desktop uses add_executable, N64Recomp for patches, file_to_c commands
+# - On Android, Gradle generates shader/mod/patch .c files beforehand
+# - This CMake consumes generated sources only
+# - NativeFileDialog is disabled
+# - SDL2 is pulled via FetchContent if missing
+# - APK loads the .so; no add_executable
+# -------------------------------
