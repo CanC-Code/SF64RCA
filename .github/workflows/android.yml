@@ -104,15 +104,15 @@ jobs:
       run: |
         RT64_CMAKE=${GITHUB_WORKSPACE}/lib/rt64/CMakeLists.txt
 
-        # Comment out SDL2 and NativeFileDialog subdirs
+        # Comment out SDL2/NFD subdirs and find_package
         sed -i 's|find_package(SDL2 REQUIRED)|# &|g' "$RT64_CMAKE"
         sed -i 's|add_subdirectory(SDL2)|# &|g' "$RT64_CMAKE"
         sed -i 's|add_subdirectory(src/contrib/nativefiledialog-extended)|# &|g' "$RT64_CMAKE"
 
         # Comment out empty or problematic include_directories
+        sed -i '/include_directories([[:space:]]*)/s/^/# /' "$RT64_CMAKE"
         sed -i '/include_directories(.*\${SDL2_INCLUDE_DIRS}.*)/s/^/# /' "$RT64_CMAKE"
         sed -i '/include_directories(.*\${NFD_INCLUDE_DIR}.*)/s/^/# /' "$RT64_CMAKE"
-        sed -i '/include_directories([[:space:]]*)/s/^/# /' "$RT64_CMAKE"
 
     # ---------- Configure and Build RT64 ----------
     - name: Configure and Build RT64
