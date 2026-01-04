@@ -137,7 +137,7 @@ jobs:
         diff -u "$RT64.bak" "$RT64" || true
 
     # ------------------------------------------------------------
-    # Patch RmlUi CMakeLists for Android (includes SDL_GL3 backend)
+    # Patch RmlUi CMakeLists for Android (force SDL_GL3 backend)
     # ------------------------------------------------------------
     - name: Patch RmlUi CMakeLists for Android
       run: |
@@ -148,7 +148,7 @@ jobs:
           {print}
           /^project\(.*\)/ {
             print "# --- Android-specific configuration ---"
-            print "set(RMLUI_BACKEND SDL_GL3)"
+            print "set(RMLUI_BACKEND SDL_GL3 CACHE STRING \"Force backend for Android\" FORCE)"
             print "if(ANDROID)"
             print "    message(STATUS \"Configuring RmlUi for Android build...\")"
             print ""
