@@ -99,10 +99,20 @@ jobs:
           convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} android/app/src/main/res/mipmap-$dpi/ic_launcher_round.png
         done
 
+    # ---------- Patch RT64 CMake ----------
+    - name: Patch RT64 to use external SDL2 and disable NFD
+      run: |
+        echo "Patching RT64 CMakeLists..."
+        RT64_CMAKE=${GITHUB_WORKSPACE}/lib/rt64/CMakeLists.txt
+        # Disable SDL2 subdir and find_package
+        sed -i 's|find_package(SDL2 REQUIRED)|# find_package(SDL2 REQUIRED)|g' "$RT64_CMAKE"
+        sed -i 's|add_subdirectory(SDL2)|# add_subdirectory(SDL2)|g' "$RT64_CMAKE"
+        # Disable NativeFileDialog subdir to avoid GTK dependency
+        sed -i 's|add_subdirectory(src/contrib/nativefiledialog-extended)|# add_subdirectory(src/contrib/nativefiledialog-extended)|g' "$RT64_CMAKE"
+
     # ---------- Configure and Build RT64 ----------
     - name: Configure and Build RT64
       run: |
-        echo "Configuring RT64 to use existing SDL2 and disable NFD..."
         mkdir -p build_rt64
         cmake -S lib/rt64 -B build_rt64 \
           -DCMAKE_BUILD_TYPE=Release \
