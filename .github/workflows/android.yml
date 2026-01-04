@@ -44,6 +44,7 @@ jobs:
         echo "Converting NRM assets..."
         mkdir -p android/app/src/main/cmods
         for f in assets/*.nrm; do
+          [ -f "$f" ] || continue
           BASENAME=$(basename "$f" .nrm | tr -c 'a-zA-Z0-9_' '_')
           OUT_C=android/app/src/main/cmods/${BASENAME}.c
           OUT_H=android/app/src/main/cmods/${BASENAME}.h
@@ -55,6 +56,7 @@ jobs:
       run: |
         echo "Converting images and fonts..."
         mkdir -p android/app/src/main/cassets
+        shopt -s globstar
         for f in assets/**/*.{png,jpg,jpeg,svg,ttf,otf}; do
           [ -f "$f" ] || continue
           BASENAME=$(basename "$f" | tr -c 'a-zA-Z0-9_' '_')
@@ -68,13 +70,13 @@ jobs:
     - name: Copy shaders
       run: |
         mkdir -p android/app/src/main/cshaders
-        cp -r assets/shaders/* android/app/src/main/cshaders/
+        cp -r assets/shaders/* android/app/src/main/cshaders/ || true
 
     # ---------- Copy patches ----------
     - name: Copy patches
       run: |
         mkdir -p android/app/src/main/cpatches
-        cp -r patches/* android/app/src/main/cpatches/
+        cp -r patches/* android/app/src/main/cpatches/ || true
 
     # ---------- Build Debug APK ----------
     - name: Build Debug APK
