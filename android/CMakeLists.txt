@@ -11,11 +11,8 @@ project(sf64rca LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Match Gradle STL
 set(CMAKE_ANDROID_STL_TYPE c++_static)
 
-# Silence third-party noise
 add_compile_options(
     -Wno-unused-parameter
     -Wno-unused-variable
@@ -63,7 +60,6 @@ add_subdirectory(
     ${CMAKE_BINARY_DIR}/freetype
 )
 
-# Canonical alias expected by consumers
 if(NOT TARGET Freetype::Freetype)
     add_library(Freetype::Freetype ALIAS freetype)
 endif()
@@ -78,14 +74,19 @@ set(RMLUI_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(RMLUI_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
 set(RMLUI_BUILD_TOOLS   OFF CACHE BOOL "" FORCE)
 
-# IMPORTANT:
-# Do NOT fake FREETYPE_FOUND or override include variables.
-# RmlUi will link against Freetype::Freetype normally.
-
 add_subdirectory(
     ${RMLUI_SOURCE_DIR}
     ${CMAKE_BINARY_DIR}/RmlUi
 )
+
+# ------------------------------------------------------------
+# Vulkan detection (optional)
+# ------------------------------------------------------------
+find_package(Vulkan)
+if(Vulkan_FOUND)
+    message(STATUS "Vulkan detected: ${Vulkan_INCLUDE_DIR}")
+    add_definitions(-DRT64_USE_VULKAN)
+endif()
 
 # ------------------------------------------------------------
 # Native game library (JNI entry)
@@ -110,6 +111,7 @@ add_library(starfox64recompiled SHARED
 target_include_directories(starfox64recompiled PRIVATE
     ${PROJECT_ROOT}/src
     ${PROJECT_ROOT}/src/platform/android
+    ${Vulkan_INCLUDE_DIR} # optional Vulkan headers
 )
 
 # ------------------------------------------------------------
@@ -125,6 +127,10 @@ target_link_libraries(starfox64recompiled
     EGL
     GLESv3
 )
+
+if(Vulkan_FOUND)
+    target_link_libraries(starfox64recompiled Vulkan::Vulkan)
+endif()
 
 # ------------------------------------------------------------
 # Android defines
