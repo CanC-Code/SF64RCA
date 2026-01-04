@@ -18,36 +18,25 @@ jobs:
       with:
         submodules: recursive
         fetch-depth: 0
-
+    
     # ---------- Verify submodules ----------
-    - name: Verify submodules are initialized
+    - name: Verify submodules
       run: |
-        echo "Checking for required libraries..."
+        echo "Checking required libraries..."
         for lib in rt64 lunasvg RmlUi N64ModernRuntime; do
           if [ ! -d "lib/$lib" ] || [ -z "$(ls -A lib/$lib)" ]; then
-            echo "ERROR: lib/$lib is missing or empty"
-            echo "Attempting to initialize submodules..."
+            echo "ERROR: lib/$lib is missing or empty. Initializing submodules..."
             git submodule update --init --recursive
             break
           fi
         done
-        echo "Verifying submodules after initialization:"
         ls -la lib/
 
-    # ---------- System Dependencies ----------
-    - name: Install system dependencies
+    # ---------- System dependencies ----------
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          git \
-          unzip \
-          wget \
-          gcc \
-          imagemagick \
-          cmake \
-          ninja-build \
-          default-jdk
+        sudo apt-get install -y build-essential git unzip wget gcc imagemagick cmake ninja-build default-jdk
 
     # ---------- Setup JDK 17 ----------
     - name: Setup JDK 17
@@ -57,7 +46,7 @@ jobs:
         java-version: 17
 
     # ---------- Android SDK / NDK ----------
-    - name: Setup Android SDK, NDK
+    - name: Setup Android SDK and NDK
       uses: android-actions/setup-android@v3
       with:
         accept-android-sdk-licenses: true
@@ -65,7 +54,7 @@ jobs:
         packages: platform-tools platforms;android-34 build-tools;34.0.0 ndk;27.3.13750724
 
     # ---------- Install CMake 3.27.3 ----------
-    - name: Install CMake 3.27.3
+    - name: Install CMake
       run: |
         CMAKE_VERSION=3.27.3
         wget -q https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
@@ -86,32 +75,25 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x android/gradlew
 
-    # ---------- Ensure required directories ----------
-    - name: Create required directories
+    # ---------- Create required directories ----------
+    - name: Ensure required directories exist
       run: |
         mkdir -p android/app/libs
         mkdir -p android/app/src/main/assets
         mkdir -p android/app/src/main/cshaders
         mkdir -p android/app/src/main/cmods
         mkdir -p android/app/src/main/cpatches
-        mkdir -p android/app/src/main/cpp
 
-    # ---------- Setup Android build structure ----------
+    # ---------- Setup build structure ----------
     - name: Setup Android build structure
       run: |
-        # Symlinks from android/app to repo sources
-        cd android/app
-        ln -sf ../../lib lib
-        ln -sf ../../include include
-        ln -sf ../../patches patches
-        ln -sf ../../src src
-        ln -sf ../../rsp rsp
-
-        # Symlink main platform/android sources into cpp
-        ln -sf ../../src/main/*.cpp cpp/
-        ln -sf ../../src/platform/android/* cpp/
-
-        echo "✓ Build structure setup complete"
+        if [ ! -L android/lib ]; then ln -s ../lib android/lib; fi
+        for dir in include RecompiledFuncs RecompiledPatches patches rsp src; do
+          if [ -d "$dir" ] && [ ! -L "android/$dir" ]; then
+            ln -s ../$dir android/$dir
+          fi
+        done
+        echo "Build structure setup complete"
 
     # ---------- Patch nativefiledialog for Android ----------
     - name: Patch nativefiledialog-extended for Android
@@ -119,32 +101,20 @@ jobs:
         NFD_CMAKE="lib/rt64/src/contrib/nativefiledialog-extended/src/CMakeLists.txt"
         if [ -f "$NFD_CMAKE" ]; then
           cp "$NFD_CMAKE" "$NFD_CMAKE.bak"
-          echo "# Guard against building on Android" > "$NFD_CMAKE.new"
-          echo "if(ANDROID)" >> "$NFD_CMAKE.new"
-          echo "    message(STATUS \"Skipping nativefiledialog on Android (not supported)\")" >> "$NFD_CMAKE.new"
-          echo "    return()" >> "$NFD_CMAKE.new"
-          echo "endif()" >> "$NFD_CMAKE.new"
-          echo "" >> "$NFD_CMAKE.new"
+          echo -e "# Guard for Android\nif(ANDROID)\n  message(STATUS \"Skipping nativefiledialog on Android\")\n  return()\nendif()\n" > "$NFD_CMAKE.new"
           cat "$NFD_CMAKE.bak" >> "$NFD_CMAKE.new"
           mv "$NFD_CMAKE.new" "$NFD_CMAKE"
-          echo "✓ Added Android guard to nativefiledialog"
-        else
-          echo "⚠️ nativefiledialog not found"
         fi
 
-    # ---------- Patch rt64 for Android SDL2 ----------
-    - name: Patch rt64 CMakeLists.txt for Android SDL2
+    # ---------- Patch rt64 for SDL2 ----------
+    - name: Patch rt64 CMakeLists.txt for SDL2
       run: |
         RT64_CMAKE="lib/rt64/CMakeLists.txt"
         if [ -f "$RT64_CMAKE" ]; then
-          cp "$RT64_CMAKE" "$RT64_CMAKE.bak"
-          sed -i 's/find_package(SDL2 REQUIRED)/if(NOT TARGET SDL2::SDL2)\n    find_package(SDL2 REQUIRED)\nendif()/' "$RT64_CMAKE"
-          echo "✓ Patched rt64 to work with FetchContent SDL2"
-        else
-          echo "⚠️ rt64 CMakeLists.txt not found"
+          sed -i 's/find_package(SDL2 REQUIRED)/if(NOT TARGET SDL2::SDL2)\n  find_package(SDL2 REQUIRED)\nendif()/' "$RT64_CMAKE"
         fi
 
-    # ---------- Build file_to_c utility ----------
+    # ---------- file_to_c utility ----------
     - name: Build file_to_c
       run: |
         cat > /tmp/file_to_c.c << 'EOF'
@@ -152,39 +122,23 @@ jobs:
         #include <stdlib.h>
         int main(int argc,char**argv){
             if(argc!=5){fprintf(stderr,"Usage: %s <input> <symbol> <cfile> <hfile>\n",argv[0]);return 1;}
-            FILE *in=fopen(argv[1],"rb");if(!in){perror("input");return 1;}
-            fseek(in,0,SEEK_END);long size=ftell(in);fseek(in,0,SEEK_SET);
+            FILE *in=fopen(argv[1],"rb"); if(!in){perror("input");return 1;}
+            fseek(in,0,SEEK_END); long size=ftell(in); fseek(in,0,SEEK_SET);
             FILE *h=fopen(argv[4],"w");
             fprintf(h,"#pragma once\nextern const unsigned char %s[];\nextern const unsigned int %s_size;\n",argv[2],argv[2]);
             fclose(h);
             FILE *c=fopen(argv[3],"w");
             fprintf(c,"#include \"%s\"\nconst unsigned char %s[] = {\n",argv[4],argv[2]);
-            for(long i=0;i<size;i++){unsigned char b;fread(&b,1,1,in);fprintf(c,"0x%02x%s",b,(i+1<size)?",":"");if((i+1)%16==0) fprintf(c,"\n");}
+            for(long i=0;i<size;i++){unsigned char b; fread(&b,1,1,in); fprintf(c,"0x%02x%s",b,(i+1<size)?",":""); if((i+1)%16==0) fprintf(c,"\n");}
             fprintf(c,"\n};\nconst unsigned int %s_size = %ld;\n",argv[2],size);
-            fclose(c);fclose(in);return 0;
+            fclose(c); fclose(in); return 0;
         }
         EOF
         gcc /tmp/file_to_c.c -o /usr/local/bin/file_to_c
         chmod +x /usr/local/bin/file_to_c
 
-    # ---------- Prepare launcher icons ----------
-    - name: Prepare launcher icons
-      run: |
-        for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-          mkdir -p android/app/src/main/res/mipmap-$d
-        done
-        convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-        convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-        convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-        convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-        convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-    # ---------- Copy static assets ----------
-    - name: Copy static assets
-      run: cp -R assets/* android/app/src/main/assets/
-
     # ---------- Generate shader headers ----------
-    - name: Generate shader headers dynamically
+    - name: Generate shader headers
       run: |
         shopt -s nullglob
         for f in shaders/*.hlsl; do
@@ -196,7 +150,7 @@ jobs:
         shopt -u nullglob
 
     # ---------- Generate mod headers ----------
-    - name: Generate mod headers dynamically
+    - name: Generate mod headers
       run: |
         shopt -s nullglob
         for f in mods/*.nrm; do
@@ -207,14 +161,28 @@ jobs:
         done
         shopt -u nullglob
 
-    # ---------- Generate patches_bin.c ----------
-    - name: Generate patches_bin.c dynamically
+    # ---------- Generate patches ----------
+    - name: Generate patches_bin.c
       run: |
         if [ -f patches/patches.bin ]; then
           file_to_c patches/patches.bin mm_patches_bin \
             android/app/src/main/cpatches/patches_bin.c \
             android/app/src/main/cpatches/patches_bin.h
         fi
+
+    # ---------- Launcher icons ----------
+    - name: Prepare launcher icons
+      run: |
+        for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do mkdir -p android/app/src/main/res/mipmap-$d; done
+        convert icons/512.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+        convert icons/512.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+        convert icons/512.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+        convert icons/512.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+        convert icons/512.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+    # ---------- Copy static assets ----------
+    - name: Copy static assets
+      run: cp -R assets/* android/app/src/main/assets/
 
     # ---------- Build APK ----------
     - name: Build Android APK
