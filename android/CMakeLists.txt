@@ -11,9 +11,7 @@ project(sf64rca LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Match Gradle's STL setting
-set(CMAKE_ANDROID_STL_TYPE c++_static)
+set(CMAKE_ANDROID_STL_TYPE c++_static) # Match Gradle STL
 
 # Silence warnings from third-party code
 add_compile_options(-Wno-unused-parameter -Wno-unused-variable)
@@ -73,7 +71,6 @@ set(RMLUI_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(RMLUI_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
 set(RMLUI_BUILD_TOOLS   OFF CACHE BOOL "" FORCE)
 
-# Force RmlUi to use our FreeType
 set(FREETYPE_FOUND TRUE)
 set(FREETYPE_INCLUDE_DIRS
     ${FREETYPE_SOURCE_DIR}/include
@@ -87,22 +84,23 @@ add_subdirectory(
 )
 
 # ------------------------------------------------------------
-# Native game library
+# Native game library (matching MainActivity)
 # ------------------------------------------------------------
 file(GLOB_RECURSE GAME_SOURCES
     ${PROJECT_ROOT}/src/*.c
     ${PROJECT_ROOT}/src/*.cpp
 )
 
-# Add rml_android.cpp explicitly
+# Include Android-specific RmlUi JNI bridge
 list(APPEND GAME_SOURCES
     ${PROJECT_ROOT}/src/platform/android/rml_android.cpp
 )
 
-add_library(sf64_native SHARED ${GAME_SOURCES})
+# Build shared library named "starfox64recompiled"
+add_library(starfox64recompiled SHARED ${GAME_SOURCES})
 
 # Include paths
-target_include_directories(sf64_native PRIVATE
+target_include_directories(starfox64recompiled PRIVATE
     ${PROJECT_ROOT}/src
     ${PROJECT_ROOT}/src/platform/android
     ${SDL2_SOURCE_DIR}/include
@@ -111,7 +109,7 @@ target_include_directories(sf64_native PRIVATE
 )
 
 # Link libraries
-target_link_libraries(sf64_native
+target_link_libraries(starfox64recompiled
     SDL2-static
     Freetype::Freetype
     RmlCore
@@ -123,7 +121,7 @@ target_link_libraries(sf64_native
 )
 
 # Android-specific compile definitions
-target_compile_definitions(sf64_native PRIVATE
+target_compile_definitions(starfox64recompiled PRIVATE
     ANDROID
     SDL_MAIN_HANDLED
 )
