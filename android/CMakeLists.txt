@@ -37,9 +37,25 @@ add_compile_definitions(
 )
 
 # -------------------------------
-# Use local Android SDL2
+# SDL2 for Android
 # -------------------------------
-set(SDL2_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../android/SDL2")  # adjust path if needed
+set(SDL2_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../android/SDL2")
+
+if(NOT EXISTS "${SDL2_SOURCE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "SDL2 source not found at ${SDL2_SOURCE_DIR}")
+endif()
+
+# Ensure Android variables are set before adding SDL2
+set(ANDROID_PLATFORM 33)  # adjust your target API if needed
+set(CMAKE_SYSTEM_NAME Android)
+set(CMAKE_ANDROID_ARCH_ABI ${CMAKE_ANDROID_ARCH_ABI})
+set(CMAKE_ANDROID_NDK $ENV{ANDROID_NDK})
+set(CMAKE_ANDROID_STL_TYPE c++_shared)
+
+# Build SDL2 as static to avoid multiple SDL_main conflicts
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+
+# Add SDL2 subdirectory
 add_subdirectory(${SDL2_SOURCE_DIR} SDL2_build)
 
 # -------------------------------
