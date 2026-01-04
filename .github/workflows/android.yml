@@ -1,4 +1,4 @@
-name: Android Build + Full Asset Conversion + APK Icons + Adaptive Icons
+name: Android Build + Asset Conversion
 
 on:
   push:
@@ -38,8 +38,8 @@ jobs:
         ndk-version: 27.3.13750724
         components: build-tools;34.0.0,platforms;android-34
 
-    # ---------- Make file_to_c executable ----------
-    - name: Ensure file_to_c is executable
+    # ---------- Ensure file_to_c is executable ----------
+    - name: Make file_to_c executable
       run: chmod +x ./file_to_c
 
     # ---------- Convert NRM assets to C ----------
@@ -56,7 +56,7 @@ jobs:
         done
 
     # ---------- Convert Images & Fonts to C ----------
-    - name: Convert images and fonts
+    - name: Convert images & fonts
       run: |
         echo "Converting images and fonts..."
         mkdir -p android/app/src/main/cassets
@@ -70,41 +70,6 @@ jobs:
           ./file_to_c "$f" "$BASENAME" "$OUT_C" "$OUT_H"
         done
 
-    # ---------- Generate APK icons ----------
-    - name: Generate APK icons
-      run: |
-        echo "Generating APK icons..."
-        sudo apt-get update && sudo apt-get install -y imagemagick
-        ICON_SRC=assets/icons/512.png
-        RES_DIR=android/app/src/main/res
-        mkdir -p $RES_DIR/mipmap-mdpi $RES_DIR/mipmap-hdpi $RES_DIR/mipmap-xhdpi $RES_DIR/mipmap-xxhdpi $RES_DIR/mipmap-xxxhdpi
-
-        convert "$ICON_SRC" -resize 48x48 $RES_DIR/mipmap-mdpi/ic_launcher.png
-        convert "$ICON_SRC" -resize 72x72 $RES_DIR/mipmap-hdpi/ic_launcher.png
-        convert "$ICON_SRC" -resize 96x96 $RES_DIR/mipmap-xhdpi/ic_launcher.png
-        convert "$ICON_SRC" -resize 144x144 $RES_DIR/mipmap-xxhdpi/ic_launcher.png
-        convert "$ICON_SRC" -resize 192x192 $RES_DIR/mipmap-xxxhdpi/ic_launcher.png
-
-    # ---------- Generate Adaptive Icons ----------
-    - name: Generate Adaptive Icons
-      run: |
-        echo "Generating adaptive icons..."
-        ADAPTIVE_DIR=android/app/src/main/res
-        mkdir -p $ADAPTIVE_DIR/mipmap-anydpi-v26
-        FOREGROUND=assets/icons/foreground.png
-        BACKGROUND=assets/icons/background.png
-
-        [ -f "$FOREGROUND" ] || cp assets/icons/512.png $ADAPTIVE_DIR/mipmap-anydpi-v26/ic_launcher_foreground.png
-        [ -f "$BACKGROUND" ] || convert assets/icons/512.png -resize 1080x1080 xc:#ffffff $ADAPTIVE_DIR/mipmap-anydpi-v26/ic_launcher_background.png
-
-        cat > $ADAPTIVE_DIR/mipmap-anydpi-v26/ic_launcher.xml <<EOL
-<?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@mipmap/ic_launcher_background"/>
-    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
-</adaptive-icon>
-EOL
-
     # ---------- Copy shaders ----------
     - name: Copy shaders
       run: |
@@ -116,6 +81,18 @@ EOL
       run: |
         mkdir -p android/app/src/main/cpatches
         cp -r patches/* android/app/src/main/cpatches/ || true
+
+    # ---------- Generate launcher icons ----------
+    - name: Generate launcher icons
+      run: |
+        echo "Generating Android launcher icons..."
+        ICON_SRC=icons/512.png
+        declare -A SIZES
+        SIZES=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
+        for dpi in "${!SIZES[@]}"; do
+          mkdir -p android/app/src/main/res/mipmap-$dpi
+          convert "$ICON_SRC" -resize ${SIZES[$dpi]}x${SIZES[$dpi]} android/app/src/main/res/mipmap-$dpi/ic_launcher.png
+        done
 
     # ---------- Build Debug APK ----------
     - name: Build Debug APK
