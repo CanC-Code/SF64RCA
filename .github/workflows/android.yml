@@ -20,7 +20,7 @@ jobs:
 
     steps:
     # ------------------------------------------------------------
-    # Checkout (FULL, recursive)
+    # Checkout repository (full, recursive submodules)
     # ------------------------------------------------------------
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
         submodules: recursive
 
     # ------------------------------------------------------------
-    # Java 17
+    # Set up JDK 17
     # ------------------------------------------------------------
     - name: Set up JDK
       uses: actions/setup-java@v3
@@ -38,17 +38,17 @@ jobs:
         java-version: 17
 
     # ------------------------------------------------------------
-    # Android SDK + NDK
+    # Install Android SDK & NDK
     # ------------------------------------------------------------
     - name: Set up Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Install NDK
+    - name: Install NDK & Build Tools
       run: |
         sdkmanager --install "ndk;27.3.13750724" "platforms;android-34" "build-tools;34.0.0"
 
     # ------------------------------------------------------------
-    # HARD FAIL if submodules are missing
+    # Verify required submodules exist
     # ------------------------------------------------------------
     - name: Verify submodules
       run: |
@@ -57,14 +57,12 @@ jobs:
         test -d android/freetype
 
     # ------------------------------------------------------------
-    # FORCE RmlUi backend BEFORE CMake runs
+    # Patch RmlUi backend for Android
     # ------------------------------------------------------------
     - name: Patch RmlUi for Android
       run: |
         RMLUI=android/RmlUi/CMakeLists.txt
-
         cp "$RMLUI" "$RMLUI.bak"
-
         awk '
           BEGIN { injected=0 }
           {
@@ -86,17 +84,16 @@ jobs:
             }
           }
         ' "$RMLUI.bak" > "$RMLUI"
-
         diff -u "$RMLUI.bak" "$RMLUI" || true
 
     # ------------------------------------------------------------
-    # Clean native build cache (CRITICAL)
+    # Clean native CMake cache
     # ------------------------------------------------------------
     - name: Remove stale CMake cache
       run: rm -rf android/app/.cxx
 
     # ------------------------------------------------------------
-    # Asset → C conversion (unchanged, preserved)
+    # Convert assets to C source
     # ------------------------------------------------------------
     - name: Make file_to_c executable
       run: chmod +x ./file_to_c
@@ -104,7 +101,6 @@ jobs:
     - name: Convert assets to C
       run: |
         mkdir -p android/app/src/main/cmods android/app/src/main/cassets
-
         for f in assets/*.nrm; do
           [ -f "$f" ] || continue
           name=$(basename "$f" .nrm)
@@ -123,14 +119,14 @@ jobs:
         done
 
     # ------------------------------------------------------------
-    # Build APK
+    # Build APK (module-specific)
     # ------------------------------------------------------------
     - name: Build Debug APK
       working-directory: android
-      run: ./gradlew assembleDebug --no-daemon --stacktrace
+      run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
     # ------------------------------------------------------------
-    # Upload artifact
+    # Upload APK artifact
     # ------------------------------------------------------------
     - name: Upload APK
       uses: actions/upload-artifact@v4
