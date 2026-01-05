@@ -41,19 +41,13 @@ add_subdirectory(
 )
 
 # ------------------------------------------------------------
-# FreeType (static, minimal, no external deps)
+# FreeType (static, minimal)
 # ------------------------------------------------------------
 set(FT_DISABLE_ZLIB     ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BZIP2    ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_PNG      ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BROTLI   ON CACHE BOOL "" FORCE)
-
-set(FT_WITH_ZLIB        OFF CACHE BOOL "" FORCE)
-set(FT_WITH_BZIP2       OFF CACHE BOOL "" FORCE)
-set(FT_WITH_PNG         OFF CACHE BOOL "" FORCE)
-set(FT_WITH_HARFBUZZ    OFF CACHE BOOL "" FORCE)
-set(FT_WITH_BROTLI      OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(
     ${FREETYPE_SOURCE_DIR}
@@ -65,11 +59,10 @@ if(NOT TARGET Freetype::Freetype)
 endif()
 
 # ------------------------------------------------------------
-# RmlUi (Android fork, SDL2 backend)
+# RmlUi (SDL2 backend)
 # ------------------------------------------------------------
 set(RMLUI_BACKEND SDL2 CACHE STRING "" FORCE)
 set(RMLUI_FONT_ENGINE freetype CACHE STRING "" FORCE)
-
 set(RMLUI_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 set(RMLUI_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
 set(RMLUI_BUILD_TOOLS   OFF CACHE BOOL "" FORCE)
@@ -89,34 +82,40 @@ if(Vulkan_FOUND)
 endif()
 
 # ------------------------------------------------------------
-# Native game library (JNI entry)
+# Native game sources
 # ------------------------------------------------------------
 file(GLOB_RECURSE GAME_SOURCES
     ${PROJECT_ROOT}/src/*.c
     ${PROJECT_ROOT}/src/*.cpp
-)
-
-# Android-specific RmlUi glue
-list(APPEND GAME_SOURCES
     ${PROJECT_ROOT}/src/platform/android/rml_android.cpp
 )
 
-add_library(starfox64recompiled SHARED
-    ${GAME_SOURCES}
+# ------------------------------------------------------------
+# Include generated assets
+# ------------------------------------------------------------
+file(GLOB_RECURSE ASSET_SOURCES
+    ${ANDROID_ROOT}/app/src/main/cmods/*.c
+    ${ANDROID_ROOT}/app/src/main/cassets/*.c
+    ${ANDROID_ROOT}/app/src/main/cshaders/*.c
+    ${ANDROID_ROOT}/app/src/main/cpatches/*.c
 )
+list(APPEND GAME_SOURCES ${ASSET_SOURCES})
 
 # ------------------------------------------------------------
-# Includes
+# Build shared library (JNI)
 # ------------------------------------------------------------
+add_library(starfox64recompiled SHARED ${GAME_SOURCES})
+
 target_include_directories(starfox64recompiled PRIVATE
     ${PROJECT_ROOT}/src
     ${PROJECT_ROOT}/src/platform/android
-    ${Vulkan_INCLUDE_DIR} # optional Vulkan headers
+    ${ANDROID_ROOT}/app/src/main/cmods
+    ${ANDROID_ROOT}/app/src/main/cassets
+    ${ANDROID_ROOT}/app/src/main/cshaders
+    ${ANDROID_ROOT}/app/src/main/cpatches
+    ${Vulkan_INCLUDE_DIR}
 )
 
-# ------------------------------------------------------------
-# Linkage
-# ------------------------------------------------------------
 target_link_libraries(starfox64recompiled
     SDL2-static
     Freetype::Freetype
