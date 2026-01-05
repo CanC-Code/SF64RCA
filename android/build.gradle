@@ -1,22 +1,9 @@
-// ----------------- Buildscript -----------------
 buildscript {
-    ext.kotlin_version = '1.8.22'
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
     dependencies {
-        classpath "com.android.tools.build:gradle:8.1.1"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath("com.android.tools.build:gradle:8.3.2")
     }
 }
 
-// ---------- Ensure repositories for all modules ----------
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
 }
