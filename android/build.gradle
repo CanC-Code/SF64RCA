@@ -1,7 +1,11 @@
-// Top-level build file for Gradle 8.4 + AGP 8.3.0
+// Root build.gradle for SF64RCA
 buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
     dependencies {
-        classpath "com.android.tools.build:gradle:8.3.0"
+        classpath 'com.android.tools.build:gradle:8.3.0'
     }
 }
 
@@ -9,11 +13,5 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-    }
-
-    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-        kotlinOptions {
-            jvmTarget = "17"
-        }
     }
 }
