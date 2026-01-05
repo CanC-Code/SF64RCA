@@ -40,7 +40,7 @@ jobs:
     # Install NDK & Build Tools (fixed NDK version)
     - name: Install NDK & Build Tools
       run: |
-        sdkmanager --install "ndk;27.3.1" "platforms;android-34" "build-tools;34.0.0"
+        sdkmanager --install "ndk;27.3.13750724" "platforms;android-34" "build-tools;34.0.0"
 
     # Install system tools
     - name: Install ImageMagick
