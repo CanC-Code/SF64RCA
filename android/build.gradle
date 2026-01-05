@@ -1,14 +1,16 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
-
+// Top-level build file for Gradle 8.4 + AGP 8.3.0
 buildscript {
-    // Only keep classpath for Gradle plugins, no repositories needed here if using settings.gradle
     dependencies {
         classpath "com.android.tools.build:gradle:8.3.0"
     }
 }
 
 allprojects {
-    // Remove repositories blocks here (Gradle 8+ enforces settings.gradle repositories)
+    repositories {
+        google()
+        mavenCentral()
+    }
+
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
         kotlinOptions {
             jvmTarget = "17"
