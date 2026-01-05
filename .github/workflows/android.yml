@@ -38,14 +38,17 @@ jobs:
         java-version: 17
 
     # ------------------------------------------------------------
-    # Set up Android SDK and NDK
+    # Set up Android SDK
     # ------------------------------------------------------------
     - name: Set up Android SDK
       uses: android-actions/setup-android@v3
 
+    # ------------------------------------------------------------
+    # Install NDK & Build Tools
+    # ------------------------------------------------------------
     - name: Install NDK & Build Tools
       run: |
-        sdkmanager --install "ndk;27.3.13750724" "platforms;android-34" "build-tools;34.0.0"
+        sdkmanager --install "ndk;27.3.137507" "platforms;android-34" "build-tools;34.0.0"
 
     # ------------------------------------------------------------
     # Install system tools
@@ -87,7 +90,7 @@ jobs:
         done
 
     # ------------------------------------------------------------
-    # Copy shaders → C (optional if you want embedded)
+    # Convert shaders → C
     # ------------------------------------------------------------
     - name: Convert shaders
       run: |
@@ -101,7 +104,7 @@ jobs:
         done
 
     # ------------------------------------------------------------
-    # Copy patches (leave as files if not embedding)
+    # Copy patches
     # ------------------------------------------------------------
     - name: Copy patches
       run: |
@@ -158,6 +161,24 @@ jobs:
     # ------------------------------------------------------------
     - name: Remove stale CMake cache
       run: rm -rf android/app/.cxx
+
+    # ------------------------------------------------------------
+    # Cache Gradle
+    # ------------------------------------------------------------
+    - name: Cache Gradle packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+    # ------------------------------------------------------------
+    # Gradle Clean
+    # ------------------------------------------------------------
+    - name: Gradle Clean
+      working-directory: android
+      run: ./gradlew clean --no-daemon
 
     # ------------------------------------------------------------
     # Build Debug APK
