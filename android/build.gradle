@@ -11,29 +11,4 @@ buildscript {
     }
 }
 
-// ----------------- JVM & Android Config -----------------
-// JVM args
-org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-
-// AndroidX
-android.useAndroidX=true
-android.enableJetifier=true
-
-// Kotlin style
-kotlin.code.style=official
-
-// Non-transitive R classes
-android.nonTransitiveRClass=true
-
-// Disable unnecessary build features
-android.defaults.buildfeatures.aidl=false
-android.defaults.buildfeatures.renderscript=false
-android.defaults.buildfeatures.resvalues=false
-android.defaults.buildfeatures.shaders=false
-
-// Gradle caching
-org.gradle.caching=true
-org.gradle.configuration-cache=false
-
-// CI stability
-org.gradle.parallel=false
+// No other configuration here; all JVM/Gradle properties are in gradle.properties
