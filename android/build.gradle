@@ -1,19 +1,17 @@
-// Root-level build.gradle — no android { } block here
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
 buildscript {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
+    // Only keep classpath for Gradle plugins, no repositories needed here if using settings.gradle
     dependencies {
-        classpath "com.android.tools.build:gradle:8.2.2"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
+        classpath "com.android.tools.build:gradle:8.3.0"
     }
 }
 
 allprojects {
-    repositories {
-        google()
-        mavenCentral()
+    // Remove repositories blocks here (Gradle 8+ enforces settings.gradle repositories)
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            jvmTarget = "17"
+        }
     }
 }
