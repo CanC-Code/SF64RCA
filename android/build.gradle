@@ -1,17 +1,39 @@
-// Root build.gradle for SF64RCA
+// ----------------- Buildscript -----------------
 buildscript {
+    ext.kotlin_version = '1.8.22'
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.3.0'
+        classpath "com.android.tools.build:gradle:8.1.1"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
+// ----------------- JVM & Android Config -----------------
+// JVM args
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+
+// AndroidX
+android.useAndroidX=true
+android.enableJetifier=true
+
+// Kotlin style
+kotlin.code.style=official
+
+// Non-transitive R classes
+android.nonTransitiveRClass=true
+
+// Disable unnecessary build features
+android.defaults.buildfeatures.aidl=false
+android.defaults.buildfeatures.renderscript=false
+android.defaults.buildfeatures.resvalues=false
+android.defaults.buildfeatures.shaders=false
+
+// Gradle caching
+org.gradle.caching=true
+org.gradle.configuration-cache=false
+
+// CI stability
+org.gradle.parallel=false
