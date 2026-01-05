@@ -1,73 +1,29 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
+    id 'kotlin-android' // keep if using Kotlin
 }
 
 android {
-    namespace "com.canccode.sf64"
+    namespace 'com.canc.sf64rca'
     compileSdk 34
-    ndkVersion "27.3.13750724"
 
     defaultConfig {
-        applicationId "com.canccode.sf64"
+        applicationId "com.canc.sf64rca"
         minSdk 24
         targetSdk 34
         versionCode 1
         versionName "1.0"
 
-        ndk {
-            abiFilters "arm64-v8a"
-        }
-
-        externalNativeBuild {
-            cmake {
-                arguments(
-                    "-DANDROID=1",
-                    "-DANDROID_ABI=arm64-v8a",
-                    "-DANDROID_PLATFORM=34",
-                    "-DANDROID_STL=c++_static",
-                    "-DANDROID_TOOLCHAIN=clang",
-
-                    // RmlUi configuration
-                    "-DRMLUI_BACKEND=SDL_GL3",
-                    "-DBUILD_SHARED_LIBS=OFF",
-                    "-DRMLUI_SAMPLES=OFF",
-                    "-DBUILD_TESTING=OFF",
-                    "-DRMLUI_SHELL=OFF",
-                    "-DRMLUI_LUA_BINDINGS=OFF",
-                    "-DRMLUI_LOTTIE_PLUGIN=OFF",
-                    "-DRMLUI_SVG_PLUGIN=OFF",
-                    "-DRMLUI_HARFBUZZ_SAMPLE=OFF",
-
-                    "-DCMAKE_C_FLAGS=-DANDROID",
-                    "-DCMAKE_CXX_FLAGS=-DANDROID -fexceptions -frtti"
-                )
-
-                cppFlags "-std=c++20 -Wno-unused-parameter -Wno-unused-variable"
-                targets "starfox64recompiled"
-            }
-        }
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
-        debug {
-            debuggable true
-            jniDebuggable true
-        }
         release {
             minifyEnabled false
-            shrinkResources false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path file("../CMakeLists.txt")
-            version "3.22.1"
+        debug {
+            // Debug-specific settings
         }
     }
 
@@ -79,29 +35,13 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-
-    packaging {
-        jniLibs {
-            useLegacyPackaging = false
-        }
-    }
-
-    buildFeatures {
-        prefab false
-        viewBinding false
-        dataBinding false
-    }
-}
-
-repositories {
-    google()
-    mavenCentral()
 }
 
 dependencies {
-    implementation fileTree(dir: "libs", include: ["*.jar"])
     implementation "androidx.core:core-ktx:1.12.0"
     implementation "androidx.appcompat:appcompat:1.7.0"
     implementation "com.google.android.material:material:1.10.0"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
+    testImplementation "junit:junit:4.13.2"
+    androidTestImplementation "androidx.test.ext:junit:1.1.6"
+    androidTestImplementation "androidx.test.espresso:espresso-core:3.5.2"
 }
