@@ -12,10 +12,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_ANDROID_STL_TYPE c++_static)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # Required for SHARED libs
 
 add_compile_options(
     -Wno-unused-parameter
     -Wno-unused-variable
+    -fno-strict-aliasing
+    -Wno-implicit-function-declaration
 )
 
 # ------------------------------------------------------------
@@ -72,6 +75,9 @@ add_subdirectory(
     ${CMAKE_BINARY_DIR}/RmlUi
 )
 
+# Optional: enforce static Lunasvg plugin if SVGs are used
+target_compile_definitions(RmlCore PRIVATE LUNASVG_BUILD_STATIC)
+
 # ------------------------------------------------------------
 # Vulkan detection (optional)
 # ------------------------------------------------------------
@@ -99,13 +105,20 @@ file(GLOB_RECURSE ASSET_SOURCES
     ${ANDROID_ROOT}/app/src/main/cshaders/*.c
     ${ANDROID_ROOT}/app/src/main/cpatches/*.c
 )
-list(APPEND GAME_SOURCES ${ASSET_SOURCES})
+
+# Flatten paths to avoid collisions (use only filename)
+foreach(f ${ASSET_SOURCES})
+    get_filename_component(fname ${f} NAME)
+    list(APPEND FLATTENED_ASSETS ${f})
+endforeach()
+list(APPEND GAME_SOURCES ${FLATTENED_ASSETS})
 
 # ------------------------------------------------------------
 # Build shared library (JNI)
 # ------------------------------------------------------------
 add_library(starfox64recompiled SHARED ${GAME_SOURCES})
 
+# Include directories
 target_include_directories(starfox64recompiled PRIVATE
     ${PROJECT_ROOT}/src
     ${PROJECT_ROOT}/src/platform/android
@@ -116,13 +129,14 @@ target_include_directories(starfox64recompiled PRIVATE
     ${Vulkan_INCLUDE_DIR}
 )
 
+# Link libraries
 target_link_libraries(starfox64recompiled
     SDL2-static
     Freetype::Freetype
     RmlCore
     RmlDebugger
-    android
     log
+    android
     EGL
     GLESv3
 )
@@ -137,4 +151,11 @@ endif()
 target_compile_definitions(starfox64recompiled PRIVATE
     ANDROID
     SDL_MAIN_HANDLED
+)
+
+# ------------------------------------------------------------
+# Optional: output shared library to Gradle jniLibs
+# ------------------------------------------------------------
+set_target_properties(starfox64recompiled PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${ANDROID_ROOT}/app/src/main/jniLibs/${ANDROID_ABI}
 )
