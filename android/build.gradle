@@ -1,49 +1,19 @@
-// build.gradle
-plugins {
-    id 'com.android.application' version '8.1.0' apply false
-    id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
-}
-
-android {
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "com.yourcompany.sf64rca"
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+// Root-level build.gradle — no android { } block here
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
     }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.2.2"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
     }
 }
 
-// REMOVE any repositories block here! Gradle 8.4 forbids project repositories
-// repositories {
-//     google()
-//     mavenCentral()
-// }
-
-dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.2.0'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.0'
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
