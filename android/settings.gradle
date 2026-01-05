@@ -1,6 +1,4 @@
-rootProject.name = "SF64RCA"
-include ':app'
-
+// pluginManagement must be first
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -8,3 +6,6 @@ pluginManagement {
         mavenCentral()
     }
 }
+
+rootProject.name = "SF64RCA"
+include ':app'
