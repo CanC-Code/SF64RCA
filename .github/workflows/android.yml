@@ -110,6 +110,7 @@ jobs:
 
 
     # Patch RmlUi backend for Android (safe project() replacement)
+
     - name: Patch RmlUi for Android
       run: |
         RMLUI=android/RmlUi/CMakeLists.txt
@@ -117,10 +118,10 @@ jobs:
 
         awk '
           BEGIN { replaced=0 }
+          /^# ---- Android forced configuration ----/ { print; next } 
           {
             if ($0 ~ /^project\(/ && replaced==0) {
               print "project(RmlUi LANGUAGES C CXX)"
-              print ""
               print "# ---- Android forced configuration ----"
               print "set(RMLUI_BACKEND SDL_GL3 CACHE STRING \"Android backend\" FORCE)"
               print "set(RMLUI_SAMPLES OFF CACHE BOOL \"\" FORCE)"
@@ -139,7 +140,9 @@ jobs:
           }
         ' "$RMLUI.bak" > "$RMLUI"
 
+        echo "Patched RmlUi CMakeLists.txt for Android:"
         diff -u "$RMLUI.bak" "$RMLUI" || true
+
 
 
 
