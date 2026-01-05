@@ -96,10 +96,7 @@ android {
     }
 }
 
-repositories {
-    google()
-    mavenCentral()
-}
+// ❌ Removed repositories block here
 
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
