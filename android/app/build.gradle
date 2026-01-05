@@ -24,6 +24,13 @@ android {
                 cppFlags "-std=c++20 -Wno-unused-parameter -Wno-unused-variable"
             }
         }
+
+        // Ensure JNI library name matches CMake target
+        externalNativeBuild {
+            cmake {
+                targets "starfox64recompiled"
+            }
+        }
     }
 
     buildTypes {
