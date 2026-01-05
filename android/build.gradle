@@ -4,6 +4,7 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        gradlePluginPortal()
     }
     dependencies {
         classpath "com.android.tools.build:gradle:8.1.1"
@@ -11,4 +12,11 @@ buildscript {
     }
 }
 
-// No other configuration here; all JVM/Gradle properties are in gradle.properties
+// ---------- Ensure repositories for all modules ----------
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
