@@ -112,36 +112,35 @@ jobs:
     # Patch RmlUi backend for Android (safe project() replacement)
 
     - name: Patch RmlUi for Android
-      run: |
-        RMLUI=android/RmlUi/CMakeLists.txt
-        cp "$RMLUI" "$RMLUI.bak"
+  run: |
+    RMLUI=android/RmlUi/CMakeLists.txt
+    cp "$RMLUI" "$RMLUI.bak"
 
-        awk '
-          BEGIN { replaced=0 }
-          /^# ---- Android forced configuration ----/ { print; next } 
-          {
-            if ($0 ~ /^project\(/ && replaced==0) {
-              print "project(RmlUi LANGUAGES C CXX)"
-              print "# ---- Android forced configuration ----"
-              print "set(RMLUI_BACKEND SDL_GL3 CACHE STRING \"Android backend\" FORCE)"
-              print "set(RMLUI_SAMPLES OFF CACHE BOOL \"\" FORCE)"
-              print "set(RMLUI_SHELL OFF CACHE BOOL \"\" FORCE)"
-              print "set(RMLUI_LUA_BINDINGS OFF CACHE BOOL \"\" FORCE)"
-              print "set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL \"\" FORCE)"
-              print "set(RMLUI_SVG_PLUGIN OFF CACHE BOOL \"\" FORCE)"
-              print "set(RMLUI_HARFBUZZ_SAMPLE OFF CACHE BOOL \"\" FORCE)"
-              print "set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)"
-              print "set(BUILD_SHARED_LIBS OFF CACHE BOOL \"\" FORCE)"
-              print "# ---- End Android configuration ----"
-              replaced=1
-              next
-            }
-            print
-          }
-        ' "$RMLUI.bak" > "$RMLUI"
+    awk '
+      BEGIN { replaced=0 }
+      /^project\(/ && replaced==0 {
+        print "project(RmlUi LANGUAGES C CXX)"
+        print "# ---- Android forced configuration ----"
+        print "set(RMLUI_BACKEND SDL_GL3 CACHE STRING \"Android backend\" FORCE)"
+        print "set(RMLUI_SAMPLES OFF CACHE BOOL \"\" FORCE)"
+        print "set(RMLUI_SHELL OFF CACHE BOOL \"\" FORCE)"
+        print "set(RMLUI_LUA_BINDINGS OFF CACHE BOOL \"\" FORCE)"
+        print "set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL \"\" FORCE)"
+        print "set(RMLUI_SVG_PLUGIN OFF CACHE BOOL \"\" FORCE)"
+        print "set(RMLUI_HARFBUZZ_SAMPLE OFF CACHE BOOL \"\" FORCE)"
+        print "set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)"
+        print "set(BUILD_SHARED_LIBS OFF CACHE BOOL \"\" FORCE)"
+        print "# ---- End Android configuration ----"
+        replaced=1
+        next
+      }
+      { print }
+    ' "$RMLUI.bak" > "$RMLUI"
 
-        echo "Patched RmlUi CMakeLists.txt for Android:"
-        diff -u "$RMLUI.bak" "$RMLUI" || true
+    echo "Patched RmlUi CMakeLists.txt:"
+    head -n 20 "$RMLUI"  # show top of file for CI logs
+
+
 
 
 
