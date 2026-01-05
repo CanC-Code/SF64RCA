@@ -1,5 +1,3 @@
-// app/build.gradle (Module-level)
-
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
@@ -30,7 +28,7 @@ android {
                     "-DANDROID_STL=c++_static",
                     "-DANDROID_TOOLCHAIN=clang",
 
-                    // ---- RmlUi hard-forced configuration ----
+                    // RmlUi configuration
                     "-DRMLUI_BACKEND=SDL_GL3",
                     "-DBUILD_SHARED_LIBS=OFF",
                     "-DRMLUI_SAMPLES=OFF",
@@ -41,7 +39,6 @@ android {
                     "-DRMLUI_SVG_PLUGIN=OFF",
                     "-DRMLUI_HARFBUZZ_SAMPLE=OFF",
 
-                    // ---- Flags ----
                     "-DCMAKE_C_FLAGS=-DANDROID",
                     "-DCMAKE_CXX_FLAGS=-DANDROID -fexceptions -frtti"
                 )
@@ -96,7 +93,10 @@ android {
     }
 }
 
-// ❌ Removed repositories block here
+repositories {
+    google()
+    mavenCentral()
+}
 
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
