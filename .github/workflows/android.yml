@@ -119,6 +119,25 @@ jobs:
         done
 
     # ------------------------------------------------------------
+    # Ensure Gradle has repositories for plugin resolution
+    # ------------------------------------------------------------
+    - name: Ensure build.gradle has repositories
+      run: |
+        BUILD_GRADLE=android/build.gradle
+        if ! grep -q "repositories {" $BUILD_GRADLE; then
+          sed -i '/dependencies {/i \
+buildscript {\n\
+    repositories {\n\
+        google()\n\
+        mavenCentral()\n\
+    }\n\
+    dependencies {\n\
+        classpath "com.android.tools.build:gradle:8.3.0"\n\
+    }\n\
+}' $BUILD_GRADLE
+        fi
+
+    # ------------------------------------------------------------
     # Build APK (module-specific)
     # ------------------------------------------------------------
     - name: Build Debug APK
