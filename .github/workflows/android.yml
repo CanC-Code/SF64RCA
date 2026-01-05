@@ -15,7 +15,6 @@ jobs:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
-      JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
       ANDROID_ABI: arm64-v8a
       ANDROID_PLATFORM: android-34
 
@@ -128,64 +127,13 @@ jobs:
         done
 
     # ------------------------------------------------------------
-    # Patch RT64 & RmlUi CMakeLists for Android
+    # Clean previous builds
     # ------------------------------------------------------------
-    - name: Patch RT64 CMakeLists for Android
-      run: |
-        RT64=lib/rt64/CMakeLists.txt
-        cp "$RT64" "$RT64.bak"
-        sed -i 's/^[[:space:]]*find_package(SDL2 REQUIRED)/# &/' "$RT64"
-        sed -i 's/^[[:space:]]*add_subdirectory(.*SDL.*)/# &/' "$RT64"
-        sed -i 's/^[[:space:]]*add_subdirectory(.*nativefiledialog.*)/# &/' "$RT64"
-        sed -i '/SDL2::SDL2/s/^/# /' "$RT64"
-        sed -i '/NFD/s/^/# /' "$RT64"
-        diff -u "$RT64.bak" "$RT64" || true
-
-    - name: Patch RmlUi CMakeLists for Android (Force)
-      run: |
-        RMLUI_CMAKE=android/RmlUi/CMakeLists.txt
-        cp "$RMLUI_CMAKE" "$RMLUI_CMAKE.bak"
-        awk '
-          {print}
-          /^project\(.*\)/ {
-            print "# --- Android-specific configuration ---"
-            print "set(RMLUI_BACKEND SDL_GL3 CACHE STRING \"Force backend for Android\" FORCE)"
-            print "if(ANDROID)"
-            print "    message(STATUS \"Configuring RmlUi for Android build...\")"
-            print "    set(BUILD_SHARED_LIBS OFF CACHE BOOL \"Static libs for Android\" FORCE)"
-            print "    set(RMLUI_SAMPLES OFF CACHE BOOL \"\" FORCE)"
-            print "    set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)"
-            print "    set(RMLUI_SHELL OFF CACHE BOOL \"\" FORCE)"
-            print "    set(RMLUI_LUA_BINDINGS OFF CACHE BOOL \"\" FORCE)"
-            print "    set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL \"\" FORCE)"
-            print "    set(RMLUI_SVG_PLUGIN OFF CACHE BOOL \"\" FORCE)"
-            print "    set(RMLUI_HARFBUZZ_SAMPLE OFF CACHE BOOL \"\" FORCE)"
-            print "    set(CMAKE_CXX_FLAGS \"-DANDROID -fexceptions -frtti\" CACHE STRING \"Android CXX flags\" FORCE)"
-            print "    set(CMAKE_C_FLAGS \"-DANDROID\" CACHE STRING \"Android C flags\" FORCE)"
-            print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cmods\")"
-            print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cassets\")"
-            print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cshaders\")"
-            print "    include_directories(\"${CMAKE_SOURCE_DIR}/android/app/src/main/cpatches\")"
-            print "    if(NOT ANDROID_ABI)"
-            print "        set(ANDROID_ABI \"arm64-v8a\" CACHE STRING \"Android ABI to build for\" FORCE)"
-            print "    endif()"
-            print "    if(NOT ANDROID_PLATFORM)"
-            print "        set(ANDROID_PLATFORM 34 CACHE STRING \"Android API level\" FORCE)"
-            print "    endif()"
-            print "endif()"
-            print "# --- End Android-specific configuration ---"
-          }
-        ' "$RMLUI_CMAKE.bak" > "$RMLUI_CMAKE"
-        diff -u "$RMLUI_CMAKE.bak" "$RMLUI_CMAKE" || true
+    - name: Clean previous builds
+      run: rm -rf android/app/.cbuild android/app/build
 
     # ------------------------------------------------------------
-    # Clean previous CMake builds (force cache refresh)
-    # ------------------------------------------------------------
-    - name: Clean previous CMake build
-      run: rm -rf android/app/.cbuild
-
-    # ------------------------------------------------------------
-    # Build APK (Gradle)
+    # Build APK
     # ------------------------------------------------------------
     - name: Build Debug APK
       working-directory: android
@@ -200,7 +148,7 @@ jobs:
       run: ./gradlew lintDebug --no-daemon
 
     # ------------------------------------------------------------
-    # Upload artifacts
+    # Upload APK
     # ------------------------------------------------------------
     - name: Upload APK
       uses: actions/upload-artifact@v4
