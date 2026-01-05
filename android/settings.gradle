@@ -1,6 +1,12 @@
-rootProject.name = "SF64RCA"
+// Fixed settings.gradle for Gradle 8.4 compatibility
 
-include(":app")
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
 
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -9,3 +15,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
+
+rootProject.name = "SF64RCA"
+include(":app")
