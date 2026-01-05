@@ -1,3 +1,4 @@
+// app/build.gradle (Module-level)
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
@@ -6,14 +7,12 @@ plugins {
 android {
     namespace "com.canccode.sf64"
     compileSdk 34
-
     ndkVersion "27.3.13750724"
 
     defaultConfig {
         applicationId "com.canccode.sf64"
         minSdk 24
         targetSdk 34
-
         versionCode 1
         versionName "1.0"
 
@@ -22,12 +21,6 @@ android {
                 arguments "-DANDROID_STL=c++_static",
                           "-DANDROID_TOOLCHAIN=clang"
                 cppFlags "-std=c++20 -Wno-unused-parameter -Wno-unused-variable"
-            }
-        }
-
-        // Ensure JNI library name matches CMake target
-        externalNativeBuild {
-            cmake {
                 targets "starfox64recompiled"
             }
         }
@@ -77,9 +70,15 @@ android {
     }
 }
 
+repositories {
+    google()
+    mavenCentral()
+}
+
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
     implementation "androidx.core:core-ktx:1.12.0"
     implementation "androidx.appcompat:appcompat:1.7.0"
     implementation "com.google.android.material:material:1.10.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
 }
