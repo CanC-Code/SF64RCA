@@ -1,11 +1,11 @@
-// pluginManagement must be first
-pluginManagement {
+rootProject.name = "SF64RCA"
+
+include(":app")
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        gradlePluginPortal()
         google()
         mavenCentral()
     }
 }
-
-rootProject.name = "SF64RCA"
-include ':app'
