@@ -1,4 +1,5 @@
 // app/build.gradle (Module-level)
+
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
@@ -16,10 +17,35 @@ android {
         versionCode 1
         versionName "1.0"
 
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+
         externalNativeBuild {
             cmake {
-                arguments "-DANDROID_STL=c++_static",
-                          "-DANDROID_TOOLCHAIN=clang"
+                arguments(
+                    "-DANDROID=1",
+                    "-DANDROID_ABI=arm64-v8a",
+                    "-DANDROID_PLATFORM=34",
+                    "-DANDROID_STL=c++_static",
+                    "-DANDROID_TOOLCHAIN=clang",
+
+                    // ---- RmlUi hard-forced configuration ----
+                    "-DRMLUI_BACKEND=SDL_GL3",
+                    "-DBUILD_SHARED_LIBS=OFF",
+                    "-DRMLUI_SAMPLES=OFF",
+                    "-DBUILD_TESTING=OFF",
+                    "-DRMLUI_SHELL=OFF",
+                    "-DRMLUI_LUA_BINDINGS=OFF",
+                    "-DRMLUI_LOTTIE_PLUGIN=OFF",
+                    "-DRMLUI_SVG_PLUGIN=OFF",
+                    "-DRMLUI_HARFBUZZ_SAMPLE=OFF",
+
+                    // ---- Flags ----
+                    "-DCMAKE_C_FLAGS=-DANDROID",
+                    "-DCMAKE_CXX_FLAGS=-DANDROID -fexceptions -frtti"
+                )
+
                 cppFlags "-std=c++20 -Wno-unused-parameter -Wno-unused-variable"
                 targets "starfox64recompiled"
             }
