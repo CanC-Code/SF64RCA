@@ -20,7 +20,7 @@ jobs:
 
     steps:
     # ------------------------------------------------------------
-    # Checkout repository (full, recursive submodules)
+    # Checkout repository (recursive submodules)
     # ------------------------------------------------------------
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -38,7 +38,7 @@ jobs:
         java-version: 17
 
     # ------------------------------------------------------------
-    # Install Android SDK & NDK
+    # Set up Android SDK and NDK
     # ------------------------------------------------------------
     - name: Set up Android SDK
       uses: android-actions/setup-android@v3
@@ -87,7 +87,7 @@ jobs:
         diff -u "$RMLUI.bak" "$RMLUI" || true
 
     # ------------------------------------------------------------
-    # Clean native CMake cache
+    # Remove stale CMake cache
     # ------------------------------------------------------------
     - name: Remove stale CMake cache
       run: rm -rf android/app/.cxx
@@ -119,26 +119,7 @@ jobs:
         done
 
     # ------------------------------------------------------------
-    # Ensure Gradle has repositories for plugin resolution
-    # ------------------------------------------------------------
-    - name: Ensure build.gradle has repositories
-      run: |
-        BUILD_GRADLE=android/build.gradle
-        if ! grep -q "repositories {" $BUILD_GRADLE; then
-          sed -i '/dependencies {/i \
-buildscript {\n\
-    repositories {\n\
-        google()\n\
-        mavenCentral()\n\
-    }\n\
-    dependencies {\n\
-        classpath "com.android.tools.build:gradle:8.3.0"\n\
-    }\n\
-}' $BUILD_GRADLE
-        fi
-
-    # ------------------------------------------------------------
-    # Build APK (module-specific)
+    # Build APK inside android/
     # ------------------------------------------------------------
     - name: Build Debug APK
       working-directory: android
