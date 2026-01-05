@@ -19,5 +19,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "SF64RCA"
-
 include(":app")
