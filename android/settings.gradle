@@ -1,10 +1,8 @@
-// Fixed settings.gradle for Gradle 8.4 compatibility
-
 pluginManagement {
     repositories {
-        gradlePluginPortal()
         google()
         mavenCentral()
+        gradlePluginPortal()
     }
 }
 
