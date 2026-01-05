@@ -152,7 +152,7 @@ jobs:
     # Copy main CMakeLists.txt into app module
     - name: Copy CMakeLists.txt into app
       run: |
-        cp android/CMakeLists.txt android/app/CMakeLists.txt
+        cp SF64RCA/android/CMakeLists.txt SF64RCA/android/app/CMakeLists.txt
 
 
 
