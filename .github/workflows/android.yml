@@ -1,8 +1,3 @@
-# File: .github/workflows/android.yml
-# Author: CCVO
-# Purpose: Robust Android CI for LLMCodeAssistant (JNI + CMake + llama.cpp)
-# Notes: Handles fresh CMake build, Gradle caching, NDK setup, avoids silent Ninja hangs
-
 name: Android Build
 
 on:
@@ -19,67 +14,151 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/27.3.137507
-      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17
-      JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17
+      ANDROID_ABI: arm64-v8a
+      ANDROID_PLATFORM: android-34
+      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.17-10/x64
 
     steps:
-      # ---------- Checkout ----------
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+    # ---------- Checkout ----------
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
 
-      # ---------- Java ----------
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+    # ---------- Java ----------
+    - name: Set up JDK
+      uses: actions/setup-java@v3
+      with:
+        distribution: temurin
+        java-version: 17
 
-      # ---------- Android SDK ----------
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+    # ---------- Android SDK ----------
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v3
 
-      - name: Install SDK / NDK / Build Tools
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "ndk;27.3.137507"
+    - name: Install NDK & Build Tools
+      run: |
+        sdkmanager --install \
+          "ndk;27.3.137507" \
+          "platforms;android-34" \
+          "build-tools;34.0.0"
 
-      # ---------- Clean stale CMake / Ninja state ----------
-      - name: Remove stale CMake cache
-        run: rm -rf app/.cxx app/build
+    # ---------- System Tools ----------
+    - name: Install ImageMagick
+      run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      # ---------- Gradle Cache ----------
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: gradle-${{ runner.os }}
+    # ---------- Asset Conversion ----------
+    - name: Make file_to_c executable
+      run: chmod +x ./file_to_c
 
-      # ---------- Permissions ----------
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+    - name: Convert NRM assets
+      run: |
+        mkdir -p android/app/src/main/cmods
+        for f in assets/*.nrm; do
+          [ -f "$f" ] || continue
+          NAME=$(basename "$f" .nrm | tr -c 'a-zA-Z0-9_' '_')
+          ./file_to_c "$f" "$NAME" \
+            android/app/src/main/cmods/${NAME}.c \
+            android/app/src/main/cmods/${NAME}.h
+        done
 
-      # ---------- Gradle Clean ----------
-      - name: Gradle Clean
-        run: ./gradlew clean --no-daemon
+    - name: Convert images, fonts, SVGs
+      run: |
+        mkdir -p android/app/src/main/cassets
+        shopt -s globstar nullglob
+        for f in assets/**/*.{png,jpg,jpeg,svg,ttf,otf}; do
+          [ -f "$f" ] || continue
+          NAME=$(dirname "$f" | sed 's|/|_|g')_$(basename "$f" | tr -c 'a-zA-Z0-9_' '_')
+          NAME="${NAME%.*}"
+          ./file_to_c "$f" "$NAME" \
+            android/app/src/main/cassets/${NAME}.c \
+            android/app/src/main/cassets/${NAME}.h
+        done
 
-      # ---------- Assemble Debug APK ----------
-      - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace --info
+    - name: Convert shaders
+      run: |
+        mkdir -p android/app/src/main/cshaders
+        for f in shaders/*.{hlsl,glsl}; do
+          [ -f "$f" ] || continue
+          NAME=$(basename "$f" | tr -c 'a-zA-Z0-9_' '_')
+          ./file_to_c "$f" "$NAME" \
+            android/app/src/main/cshaders/${NAME}.c \
+            android/app/src/main/cshaders/${NAME}.h
+        done
 
-      # ---------- Upload Artifact ----------
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: LLMCodeAssistant-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+    - name: Copy patches
+      run: |
+        mkdir -p android/app/src/main/cpatches
+        cp -r patches/* android/app/src/main/cpatches/ || true
+
+    # ---------- Icons ----------
+    - name: Generate launcher icons
+      run: |
+        ICON=icons/512.png
+        declare -A DPI=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
+        for d in "${!DPI[@]}"; do
+          mkdir -p android/app/src/main/res/mipmap-$d
+          convert "$ICON" -resize ${DPI[$d]}x${DPI[$d]} \
+            android/app/src/main/res/mipmap-$d/ic_launcher.png
+          convert "$ICON" -resize ${DPI[$d]}x${DPI[$d]} \
+            android/app/src/main/res/mipmap-$d/ic_launcher_round.png
+        done
+
+    # ---------- RmlUi Patch ----------
+    - name: Patch RmlUi for Android
+      run: |
+        RMLUI=android/RmlUi/CMakeLists.txt
+        cp "$RMLUI" "$RMLUI.bak"
+
+        awk '
+          BEGIN { replaced=0 }
+          /^project\(/ && replaced==0 {
+            print "project(RmlUi LANGUAGES C CXX)"
+            print "# ---- Android forced configuration ----"
+            print "set(RMLUI_BACKEND SDL_GL3 CACHE STRING \"Android backend\" FORCE)"
+            print "set(RMLUI_SAMPLES OFF CACHE BOOL \"\" FORCE)"
+            print "set(RMLUI_SHELL OFF CACHE BOOL \"\" FORCE)"
+            print "set(RMLUI_LUA_BINDINGS OFF CACHE BOOL \"\" FORCE)"
+            print "set(RMLUI_LOTTIE_PLUGIN OFF CACHE BOOL \"\" FORCE)"
+            print "set(RMLUI_SVG_PLUGIN OFF CACHE BOOL \"\" FORCE)"
+            print "set(RMLUI_HARFBUZZ_SAMPLE OFF CACHE BOOL \"\" FORCE)"
+            print "set(BUILD_TESTING OFF CACHE BOOL \"\" FORCE)"
+            print "set(BUILD_SHARED_LIBS OFF CACHE BOOL \"\" FORCE)"
+            print "# ---- End Android configuration ----"
+            replaced=1
+            next
+          }
+          { print }
+        ' "$RMLUI.bak" > "$RMLUI"
+
+        echo "===== RmlUi CMakeLists.txt (patched) ====="
+        head -n 40 "$RMLUI"
+
+    # ---------- Cleanup ----------
+    - name: Remove stale CMake cache
+      run: rm -rf android/app/.cxx
+
+    # ---------- Gradle ----------
+    - name: Cache Gradle
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+    - name: Gradle Clean
+      working-directory: android
+      run: ./gradlew clean --no-daemon
+
+    - name: Build Debug APK
+      working-directory: android
+      run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+    # ---------- Artifact ----------
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Starfox64RCA-debug
+        path: android/app/build/outputs/apk/debug/app-debug.apk
